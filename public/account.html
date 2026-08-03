@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Veripher — Account &amp; Wallet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#F6F9FC;--surface:#FFFFFF;--border:#E7EBF0;--border-2:#DDE3EC;--ink:#0A2540;--muted:#68758B;--faint:#94A0B4;--primary:#635BFF;--primary-h:#524ce6;--primary-soft:#EEEDFF;--teal:#06A594;--teal-soft:#E4F7F3;--green:#0A8F5B;--green-soft:#E3F6EC;--danger:#E2483D;--danger-soft:#FEF3F2;--shadow:0 1px 2px rgba(10,37,64,.04),0 4px 12px rgba(10,37,64,.06);--radius:16px}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;padding:24px 20px;display:flex;justify-content:center;align-items:flex-start;-webkit-font-smoothing:antialiased}
+  .app{width:100%;max-width:460px}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:20px;letter-spacing:-.03em}
+  .brand svg{display:block}
+  .navlink{font-size:13.5px;font-weight:600;color:var(--primary);cursor:pointer}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:16px;box-shadow:var(--shadow)}
+  .eyebrow{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:4px}
+  .sub{font-size:13.5px;color:var(--muted);margin-bottom:20px}
+  label{display:block;font-size:13px;font-weight:600;color:var(--ink);margin:16px 0 8px 2px}
+  input[type=email],input[type=password]{width:100%;background:var(--bg);border:1px solid var(--border-2);border-radius:11px;color:var(--ink);font-size:15px;font-family:'Inter';padding:13px 14px;transition:border-color .15s,box-shadow .15s}
+  input::placeholder{color:var(--faint)}
+  input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);background:#fff}
+  .btn{width:100%;border:none;border-radius:12px;padding:15px;font-size:15px;font-weight:600;font-family:'Inter';cursor:pointer;transition:transform .06s,background .15s;letter-spacing:-.01em}
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{background:var(--primary);color:#fff;box-shadow:0 2px 6px rgba(99,91,255,.35);margin-top:22px}
+  .btn-primary:hover{background:var(--primary-h)}
+  .btn:disabled{opacity:.55;cursor:not-allowed;box-shadow:none}
+  .toggle{text-align:center;margin-top:18px;font-size:13.5px;color:var(--muted)}
+  .toggle a{color:var(--primary);cursor:pointer;text-decoration:none;font-weight:600}
+  .err{display:none;background:var(--danger-soft);border:1px solid #F3C9C5;color:var(--danger);font-size:13px;font-weight:500;padding:11px 14px;border-radius:10px;margin-top:14px}
+  .err.show{display:block}
+  .hide{display:none}
+  .balance-card{background:linear-gradient(135deg,#635BFF,#8b85ff);border:none;color:#fff;box-shadow:0 8px 24px rgba(99,91,255,.30)}
+  .bal-label{font-size:13px;opacity:.85;margin-bottom:8px;font-weight:500}
+  .bal-amt{font-family:'JetBrains Mono';font-size:40px;font-weight:700;letter-spacing:-.02em}
+  .bal-ngn{font-family:'JetBrains Mono';font-size:13px;opacity:.85;margin-top:6px}
+
+  /* payment method cards */
+  .method{border:1.5px solid var(--border-2);border-radius:13px;padding:16px;margin-bottom:12px;cursor:pointer;transition:border-color .12s,background .12s}
+  .method.active{border-color:var(--primary);background:var(--primary-soft)}
+  .method.soon{cursor:default;background:var(--green-soft);border-color:#BFE9D2}
+  .method-top{display:flex;align-items:center;justify-content:space-between}
+  .method-name{display:flex;align-items:center;gap:11px;font-weight:700;font-size:15px}
+  .method-ic{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;font-size:18px;flex-shrink:0}
+  .method-ic.bank{background:var(--green);color:#fff}
+  .method-ic.crypto{background:#F7931A;color:#fff}
+  .method-desc{font-size:12.5px;color:var(--muted);margin-top:3px;margin-left:49px}
+  .badge{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:4px 9px;border-radius:20px}
+  .badge.soon{background:var(--green);color:#fff}
+  .badge.live{background:var(--teal-soft);color:var(--teal)}
+  .radio{width:20px;height:20px;border-radius:50%;border:2px solid var(--border-2);flex-shrink:0}
+  .method.active .radio{border-color:var(--primary);background:var(--primary);box-shadow:inset 0 0 0 3px #fff}
+
+  .crypto-body{margin-top:6px}
+  .amounts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:4px 0}
+  .amt{background:var(--bg);border:1.5px solid var(--border-2);border-radius:11px;padding:14px 0;text-align:center;cursor:pointer;transition:all .12s}
+  .amt .u{font-family:'JetBrains Mono';font-weight:700;font-size:16px;color:var(--ink);display:block}
+  .amt .n{font-size:10.5px;color:var(--muted);margin-top:2px;font-family:'JetBrains Mono'}
+  .amt:hover{border-color:var(--faint)}
+  .amt.sel{border-color:var(--primary);background:var(--primary-soft)}
+  .amt.sel .u{color:var(--primary)}
+  .custom{position:relative;margin-top:10px}
+  .custom span{position:absolute;left:15px;top:50%;transform:translateY(-50%);color:var(--muted);font-family:'JetBrains Mono';font-weight:700}
+  .custom input{width:100%;background:var(--bg);border:1px solid var(--border-2);border-radius:11px;color:var(--ink);font-family:'JetBrains Mono';font-size:16px;padding:14px 14px 14px 30px}
+  .custom input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);background:#fff}
+  .minnote{font-size:12px;color:var(--faint);margin-top:8px;text-align:center}
+  .coins{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:16px;flex-wrap:wrap}
+  .coin{font-family:'JetBrains Mono';font-size:11px;color:var(--muted);background:var(--bg);border:1px solid var(--border-2);padding:5px 10px;border-radius:20px;font-weight:500}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 128 128"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#635BFF"/><stop offset="1" stop-color="#8B85FF"/></linearGradient></defs><rect x="14" y="14" width="100" height="100" rx="28" fill="url(#g)"/><path d="M44 66 L59 81 L86 50" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/><circle cx="100" cy="28" r="8" fill="#06A594" stroke="#fff" stroke-width="3.5"/></svg>
+      Veripher
+    </div>
+    <span class="navlink hide" id="logoutLink">Log out</span>
+  </header>
+
+  <div class="card" id="authCard">
+    <div class="eyebrow" id="authTitle">Create your account</div>
+    <div class="sub" id="authSub">Get a verification number in under a minute.</div>
+    <label>Email</label>
+    <input type="email" id="email" placeholder="you@email.com" autocomplete="email">
+    <label>Password</label>
+    <input type="password" id="pass" placeholder="••••••••" autocomplete="current-password">
+    <button class="btn btn-primary" id="authBtn">Create account</button>
+    <div class="err" id="authErr"></div>
+    <div class="toggle" id="toggle">Already have an account? <a id="toggleLink">Sign in</a></div>
+  </div>
+
+  <div class="hide" id="walletView">
+    <div class="card balance-card">
+      <div class="bal-label">Wallet balance</div>
+      <div class="bal-amt" id="balAmt">$0.00</div>
+      <div class="bal-ngn" id="balNgn">≈ ₦0</div>
+    </div>
+
+    <div class="card">
+      <div class="eyebrow">Add funds</div>
+      <div class="sub">Choose how you'd like to top up your wallet.</div>
+
+      <!-- Bank transfer (primary, coming soon) -->
+      <div class="method soon">
+        <div class="method-top">
+          <div class="method-name"><span class="method-ic bank">🏦</span> Bank Transfer (Naira)</div>
+          <span class="badge soon">Coming soon</span>
+        </div>
+        <div class="method-desc">Pay in ₦ from any Nigerian bank. Instant wallet top-up.</div>
+      </div>
+
+      <!-- Crypto (working) -->
+      <div class="method active" id="cryptoMethod">
+        <div class="method-top">
+          <div class="method-name"><span class="method-ic crypto">₿</span> Crypto</div>
+          <span class="badge live">Available</span>
+        </div>
+        <div class="method-desc">USDT, BTC and 150+ coins. Best for international customers.</div>
+      </div>
+
+      <div class="crypto-body" id="cryptoBody">
+        <div class="amounts" id="amounts"></div>
+        <div class="custom hide" id="customWrap"><span>$</span><input type="number" id="customAmt" placeholder="Amount in USD (min $20)" min="20"></div>
+        <button class="btn btn-primary" id="payBtn">Continue to payment</button>
+        <div class="err" id="payErr"></div>
+        <div class="minnote">Minimum top-up is $20. Funds are credited after network confirmation.</div>
+        <div class="coins"><span class="coin">USDT</span><span class="coin">USDC</span><span class="coin">BTC</span><span class="coin">ETH</span><span class="coin">TRX</span><span class="coin">+150 more</span></div>
+      </div>
+    </div>
+
+    <div class="card" style="text-align:center">
+      <div class="sub" style="margin:0 0 12px">Ready to verify a service?</div>
+      <a class="btn btn-primary" style="margin:0;display:block;text-decoration:none" href="verify.html">Get a number →</a>
+    </div>
+  </div>
+</div>
+
+<script>
+const USD_TO_NGN=1600;   // display rate (buffered above market)
+const MIN_USD=20;
+const $=id=>document.getElementById(id);
+let mode='signup', chosen=20;
+const token=()=>localStorage.getItem('veripher_token');
+function showErr(el,msg){el.textContent=msg;el.classList.add('show');}
+function clrErr(el){el.classList.remove('show');}
+function ngn(usd){return '₦'+Math.round(usd*USD_TO_NGN).toLocaleString();}
+
+/* build amount buttons */
+const TIERS=[20,50,100];
+function buildAmounts(){
+  const wrap=$('amounts'); wrap.innerHTML='';
+  TIERS.forEach((v,i)=>{
+    const el=document.createElement('div');
+    el.className='amt'+(i===0?' sel':''); el.dataset.v=v;
+    el.innerHTML=`<span class="u">$${v}</span><span class="n">${ngn(v)}</span>`;
+    el.onclick=()=>{document.querySelectorAll('.amt').forEach(a=>a.classList.remove('sel'));el.classList.add('sel');$('customWrap').classList.add('hide');chosen=v;clrErr($('payErr'));};
+    wrap.appendChild(el);
+  });
+  const c=document.createElement('div');
+  c.className='amt'; c.dataset.v='custom';
+  c.innerHTML=`<span class="u">Custom</span><span class="n">min $20</span>`;
+  c.onclick=()=>{document.querySelectorAll('.amt').forEach(a=>a.classList.remove('sel'));c.classList.add('sel');$('customWrap').classList.remove('hide');chosen='custom';clrErr($('payErr'));};
+  wrap.appendChild(c);
+}
+buildAmounts();
+
+window.addEventListener('load', async ()=>{
+  if(!token()) return;
+  try{
+    const r=await fetch('/api/me',{headers:{Authorization:'Bearer '+token()}});
+    if(r.ok){ const d=await r.json(); showWallet(d.balanceUSD); }
+    else localStorage.removeItem('veripher_token');
+  }catch(e){}
+});
+
+function bindToggle(){ $('toggleLink').onclick=()=>{
+  mode=mode==='signup'?'login':'signup';
+  $('authTitle').textContent=mode==='signup'?'Create your account':'Welcome back';
+  $('authSub').textContent=mode==='signup'?'Get a verification number in under a minute.':'Sign in to your wallet.';
+  $('authBtn').textContent=mode==='signup'?'Create account':'Sign in';
+  $('toggle').innerHTML=mode==='signup'?'Already have an account? <a id="toggleLink">Sign in</a>':'New here? <a id="toggleLink">Create account</a>';
+  clrErr($('authErr')); bindToggle();
+};}
+bindToggle();
+
+$('authBtn').onclick=async()=>{
+  clrErr($('authErr'));
+  const email=$('email').value.trim(), pass=$('pass').value;
+  if(!email||!pass){showErr($('authErr'),'Enter your email and password.');return;}
+  $('authBtn').disabled=true; $('authBtn').textContent='Please wait…';
+  try{
+    const r=await fetch(mode==='signup'?'/api/signup':'/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,pass})});
+    const d=await r.json();
+    if(!r.ok){showErr($('authErr'),d.error||'Something went wrong.');}
+    else{ localStorage.setItem('veripher_token',d.token); showWallet(d.balanceUSD); }
+  }catch(e){showErr($('authErr'),'Cannot reach the server. Try again.');}
+  $('authBtn').disabled=false; $('authBtn').textContent=mode==='signup'?'Create account':'Sign in';
+};
+
+$('logoutLink').onclick=()=>{ localStorage.removeItem('veripher_token'); location.reload(); };
+
+function showWallet(b){ $('authCard').classList.add('hide'); $('walletView').classList.remove('hide'); $('logoutLink').classList.remove('hide'); setBalance(b||0); }
+function setBalance(usd){ $('balAmt').textContent='$'+Number(usd).toFixed(2); $('balNgn').textContent='≈ '+ngn(usd); }
+
+/* ---- crypto pay: FIXED so it never hangs ---- */
+$('payBtn').onclick=async()=>{
+  clrErr($('payErr'));
+  let amount=chosen==='custom'?parseFloat($('customAmt').value):chosen;
+  if(!amount || amount<MIN_USD){ showErr($('payErr'),'Minimum top-up is $'+MIN_USD+'.'); return; }
+
+  $('payBtn').disabled=true; $('payBtn').textContent='Creating invoice…';
+
+  // hard timeout so it can never spin forever
+  const controller = new AbortController();
+  const timeout = setTimeout(()=>controller.abort(), 20000);
+
+  try{
+    const r=await fetch('/api/wallet/topup',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+token()},
+      body:JSON.stringify({amountUSD:amount}),
+      signal: controller.signal
+    });
+    const d=await r.json().catch(()=>({}));
+    if(r.ok && d.invoice_url){ window.location=d.invoice_url; return; }  // success -> leave page
+    showErr($('payErr'), d.error || 'Could not start payment. Try a different amount.');
+  }catch(e){
+    showErr($('payErr'), e.name==='AbortError' ? 'Payment timed out. Please try again.' : 'Cannot reach the server. Try again.');
+  }finally{
+    clearTimeout(timeout);
+    // ALWAYS reset the button so you can retry without refreshing
+    $('payBtn').disabled=false;
+    $('payBtn').textContent='Continue to payment';
+  }
+};
+</script>
+</body>
+</html>
