@@ -35,6 +35,14 @@
   .svc .nm{flex:1;font-size:14.5px;font-weight:500}
   .svc .pr{font-family:'JetBrains Mono';font-size:13px;color:var(--muted);font-weight:500}
   .svc.sel .pr{color:var(--primary);font-weight:700}
+
+  .svc .pr{display:flex;flex-direction:column;align-items:flex-end;line-height:1.15}
+  .pr-ngn{font-family:'JetBrains Mono';font-size:14px;font-weight:700;color:var(--ink)}
+  .pr-usd{font-family:'JetBrains Mono';font-size:11px;color:var(--faint);font-weight:500}
+  .svc.sel .pr-ngn{color:var(--primary)}
+  .pr-load{color:var(--faint);font-family:'JetBrains Mono';font-size:13px}
+  .pr-out{color:var(--faint);font-size:12px}
+  #price .pr-ngn{font-size:24px} #price .pr-usd{font-size:14px;margin-left:6px}
   .empty{text-align:center;color:var(--muted);font-size:13px;padding:24px}
   label{display:block;font-size:13px;font-weight:600;color:var(--ink);margin:18px 0 8px 2px}
   select{width:100%;appearance:none;background:var(--bg);color:var(--ink);border:1px solid var(--border-2);border-radius:11px;padding:13px 14px;font-size:15px;font-family:'Inter';cursor:pointer;transition:border-color .15s,box-shadow .15s;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2368758B' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
@@ -98,10 +106,31 @@
     <div class="list" id="list"></div>
     <label>Country</label>
     <select id="country">
-      <option value="england">England 🇬🇧</option><option value="usa">USA 🇺🇸</option>
-      <option value="india">India 🇮🇳</option><option value="indonesia">Indonesia 🇮🇩</option>
-      <option value="philippines">Philippines 🇵🇭</option><option value="australia">Australia 🇦🇺</option><option value="france">France 🇫🇷</option>
-      <option value="southafrica">South Africa 🇿🇦</option><option value="germany">Germany 🇩🇪</option>
+      <option value="usa">🇺🇸 USA</option>
+      <option value="england">🇬🇧 England</option>
+      <option value="india">🇮🇳 India</option>
+      <option value="indonesia">🇮🇩 Indonesia</option>
+      <option value="philippines">🇵🇭 Philippines</option>
+      <option value="australia">🇦🇺 Australia</option>
+      <option value="france">🇫🇷 France</option>
+      <option value="southafrica">🇿🇦 South Africa</option>
+      <option value="germany">🇩🇪 Germany</option>
+      <option value="poland">🇵🇱 Poland</option>
+      <option value="netherlands">🇳🇱 Netherlands</option>
+      <option value="brazil">🇧🇷 Brazil</option>
+      <option value="hongkong">🇭🇰 Hong Kong</option>
+      <option value="italy">🇮🇹 Italy</option>
+      <option value="vietnam">🇻🇳 Vietnam</option>
+      <option value="taiwan">🇹🇼 Taiwan</option>
+      <option value="sweden">🇸🇪 Sweden</option>
+      <option value="norway">🇳🇴 Norway</option>
+      <option value="portugal">🇵🇹 Portugal</option>
+      <option value="kuwait">🇰🇼 Kuwait</option>
+      <option value="israel">🇮🇱 Israel</option>
+      <option value="canada">🇨🇦 Canada</option>
+      <option value="mexico">🇲🇽 Mexico</option>
+      <option value="spain">🇪🇸 Spain</option>
+      <option value="argentina">🇦🇷 Argentina</option>
     </select>
     <div class="price-row">
       <span class="price-label" id="priceLabel">Select a service</span>
@@ -148,7 +177,9 @@ const CATALOG={
   "Surveys & research":[["Swagbucks","swagbucks",.12,"#2C9AD9"],["YouGov","yougovshopper",.12,"#FF412C"],["Ipsos iSay","ipsosisay",.12,"#00A0E3"],["Prime Opinion","primeopinion",.12,"#5B2E91"],["Prodege","prodege",.12,"#00B0F0"]],
   "Finance (higher risk)":[["PayPal","paypal",.35,"#003087"],["Wise","wise",.25,"#37517E"],["Coinbase","coinbase",.30,"#0052FF"],["Venmo","venmo",.28,"#3D95CE"]]
 };
-const MARKUP=3.1, USD_TO_NGN=1380;
+const USD_TO_NGN=1600;
+let livePrices={};   // filled from backend per country
+let pricesLoading=false;
 const $=id=>document.getElementById(id);
 const token=()=>localStorage.getItem('veripher_token');
 let selected=null, order=null, timerInt=null, pollInt=null, secs=15*60;
@@ -193,19 +224,46 @@ function render(filter=""){
     for(const [nm,slug,usd,color] of m){
       const row=document.createElement('div');
       row.className='svc'+(selected&&selected.slug===slug?' sel':'');
-      row.innerHTML=`${tileHTML(nm,slug,color)}<div class="nm">${nm}</div><div class="pr">~$${priceOf(usd).toFixed(2)}</div>`;
+      row.innerHTML=`${tileHTML(nm,slug,color)}<div class="nm">${nm}</div><div class="pr">${priceCell(slug)}</div>`;
       row.onclick=()=>{selected={nm,slug,usd};render(filter);syncPrice();};
       list.appendChild(row);
     }
   }
   if(!any) list.innerHTML='<div class="empty">No service matches that.</div>';
 }
-function syncPrice(){ if(!selected)return;
-  $('priceLabel').textContent='Est. price · '+selected.nm;
-  $('price').textContent='~$'+priceOf(selected.usd).toFixed(2);
-  $('price').style.color='var(--ink)'; $('getBtn').disabled=false;
+function syncPrice(){ if(!selected){return;}
+  const p=livePrices[selected.slug];
+  $('priceLabel').textContent = selected.nm;
+  if(pricesLoading){ $('price').innerHTML='<span class=\"pr-usd\">loading…</span>'; $('getBtn').disabled=true; return; }
+  if(!p || !p.available){ $('price').innerHTML='<span class=\"pr-out\">Out of stock</span>'; $('getBtn').disabled=true; return; }
+  const ngn=Math.round(p.price*USD_TO_NGN).toLocaleString();
+  $('price').innerHTML='<span class=\"pr-ngn\">₦'+ngn+'</span> <span class=\"pr-usd\">$'+p.price.toFixed(2)+'</span>';
+  $('getBtn').disabled=false;
 }
-$('q').addEventListener('input',e=>render(e.target.value)); render();
+
+/* dual-currency price cell: Naira big/primary, USD small/secondary */
+function priceCell(slug){
+  const p = livePrices[slug];
+  if(pricesLoading) return '<span class="pr-load">…</span>';
+  if(!p || !p.available) return '<span class="pr-out">—</span>';
+  const ngn = Math.round(p.price*USD_TO_NGN).toLocaleString();
+  return `<span class="pr-ngn">₦${ngn}</span><span class="pr-usd">$${p.price.toFixed(2)}</span>`;
+}
+/* fetch all real prices for the chosen country in ONE call */
+async function loadPrices(){
+  const country=$('country').value;
+  pricesLoading=true; livePrices={}; render($('q').value); syncPrice();
+  try{
+    const r=await fetch('/api/prices/'+country);
+    const d=await r.json();
+    livePrices=d.prices||{};
+  }catch(e){ livePrices={}; }
+  pricesLoading=false; render($('q').value); syncPrice();
+}
+
+$('q').addEventListener('input',e=>render(e.target.value));
+$('country').addEventListener('change', loadPrices);
+render(); loadPrices();
 
 /* ---- buy a real number ---- */
 $('getBtn').addEventListener('click',async()=>{
