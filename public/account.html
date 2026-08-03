@@ -96,8 +96,8 @@
   <div class="hide" id="walletView">
     <div class="card balance-card">
       <div class="bal-label">Wallet balance</div>
-      <div class="bal-amt" id="balAmt">$0.00</div>
-      <div class="bal-ngn" id="balNgn">≈ ₦0</div>
+      <div class="bal-amt" id="balNgn">₦0</div>
+      <div class="bal-ngn" id="balUsd">≈ $0.00</div>
     </div>
 
     <div class="card">
@@ -204,7 +204,7 @@ $('authBtn').onclick=async()=>{
 $('logoutLink').onclick=()=>{ localStorage.removeItem('veripher_token'); location.reload(); };
 
 function showWallet(b){ $('authCard').classList.add('hide'); $('walletView').classList.remove('hide'); $('logoutLink').classList.remove('hide'); setBalance(b||0); }
-function setBalance(usd){ $('balAmt').textContent='$'+Number(usd).toFixed(2); $('balNgn').textContent='≈ '+ngn(usd); }
+function setBalance(usd){ const u=Number(usd); $('balNgn').textContent=ngn(u); $('balUsd').textContent='≈ $'+u.toFixed(2); }
 
 /* ---- crypto pay: FIXED so it never hangs ---- */
 $('payBtn').onclick=async()=>{
