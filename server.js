@@ -1,8 +1,7 @@
 /* ============================================================
    Veripher — backend (Node.js + Express + PostgreSQL)
-   Secrets come from environment variables (set in Render):
-   FIVESIM_TOKEN, NOWPAY_KEY, NOWPAY_IPN_SECRET, JWT_SECRET,
-   BASE_URL, DATABASE_URL
+   Env vars (set in Render): FIVESIM_TOKEN, NOWPAY_KEY,
+   NOWPAY_IPN_SECRET, JWT_SECRET, BASE_URL, DATABASE_URL
    ============================================================ */
 
 const express = require('express');
@@ -22,7 +21,28 @@ const {
   JWT_SECRET = 'dev-secret', BASE_URL = 'http://localhost:3000'
 } = process.env;
 
-const MARKUP = 3.1;
+/* ============================================================
+   PRICING RULES  (one place — used for BOTH display and charge)
+   - WhatsApp + USA  -> 2x  (loss-leader, high demand)
+   - everything else -> 3x, with a $0.50 minimum floor
+   ============================================================ */
+function resalePrice(service, country, costUSD){
+  if(service === 'whatsapp' && country === 'usa'){
+    return +(costUSD * 2).toFixed(2);
+  }
+  return +(Math.max(costUSD * 3, 0.50)).toFixed(2);
+}
+
+/* find the cheapest IN-STOCK operator cost for a service in 5sim price data */
+function cheapestInStock(serviceData){
+  let cost = Infinity;
+  if(serviceData){
+    for(const info of Object.values(serviceData)){
+      if(info && info.count > 0 && info.cost < cost) cost = info.cost;
+    }
+  }
+  return cost === Infinity ? null : cost;
+}
 
 async function fivesim(path){
   const r = await fetch('https://5sim.net/v1' + path, {
@@ -67,10 +87,29 @@ app.get('/api/me', auth, async (req,res)=>{
   res.json({ balanceUSD: Number(u.balance_usd) });
 });
 
+/* ============================================================
+   BULK PRICES  — one call returns real live prices for every
+   service in a chosen country (fast: single 5sim request)
+   ============================================================ */
+app.get('/api/prices/:country', async (req,res)=>{
+  const country = req.params.country;
+  const data = await fivesim(`/guest/prices?country=${country}`);
+  if(data._error || !data[country]) return res.json({ prices:{} });
+
+  const out = {};
+  for(const [service, operators] of Object.entries(data[country])){
+    const cost = cheapestInStock(operators);
+    if(cost !== null){
+      out[service] = { price: resalePrice(service, country, cost), available: true };
+    }
+  }
+  res.json({ prices: out });
+});
+
 /* ---------- wallet top-up ---------- */
 app.post('/api/wallet/topup', auth, async (req,res)=>{
   const amountUSD = parseFloat(req.body.amountUSD);
-  if(!amountUSD || amountUSD < 1) return res.status(400).json({ error:'Enter at least $1' });
+  if(!amountUSD || amountUSD < 20) return res.status(400).json({ error:'Minimum top-up is $20' });
   const orderId = 'topup_' + crypto.randomBytes(8).toString('hex');
   await pool.query('INSERT INTO invoices (order_id, email, amount_usd) VALUES ($1,$2,$3)', [orderId, req.email, amountUSD]);
   const r = await fetch('https://api.nowpayments.io/v1/invoice', {
@@ -95,7 +134,6 @@ app.post('/api/ipn/nowpayments', async (req,res)=>{
   const expected = crypto.createHmac('sha512', NOWPAY_IPN_SECRET).update(sorted).digest('hex');
   if(sig !== expected) return res.status(401).send('bad signature');
   if(data.payment_status === 'finished'){
-    // credit once, atomically
     const inv = (await pool.query('SELECT * FROM invoices WHERE order_id=$1 AND credited=false', [data.order_id])).rows[0];
     if(inv){
       await pool.query('UPDATE invoices SET credited=true WHERE order_id=$1', [inv.order_id]);
@@ -111,7 +149,7 @@ function sortKeys(o){
   return o;
 }
 
-/* ---------- orders ---------- */
+/* ---------- orders (buy a number) ---------- */
 app.post('/api/orders', auth, async (req,res)=>{
   const { service, country } = req.body;
 
@@ -133,9 +171,8 @@ app.post('/api/orders', auth, async (req,res)=>{
     return res.status(400).json({ error:'No numbers available, try another country' });
 
   const costUSD   = Number(order.price);
-  const resaleUSD = +(costUSD * MARKUP).toFixed(2);
+  const resaleUSD = resalePrice(service, country, costUSD);   // SAME rule as display
 
-  // take funds only if balance covers it (atomic conditional update)
   const spend = await pool.query(
     'UPDATE users SET balance_usd = balance_usd - $1 WHERE email=$2 AND balance_usd >= $1 RETURNING balance_usd',
     [resaleUSD, req.email]
@@ -169,7 +206,6 @@ app.post('/api/orders/:id/cancel', auth, async (req,res)=>{
   res.json({ ok:true });
 });
 
-/* ---------- start ---------- */
 const PORT = process.env.PORT || 3000;
 init()
   .then(()=> app.listen(PORT, ()=> console.log('Veripher backend on port ' + PORT)))
