@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Veripher — Verification codes without your real number</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F6F9FC;--surface:#FFFFFF;--border:#E7EBF0;--border-2:#DDE3EC;
+    --ink:#0A2540;--muted:#68758B;--faint:#94A0B4;
+    --primary:#635BFF;--primary-h:#524ce6;--primary-soft:#EEEDFF;
+    --teal:#06A594;--teal-soft:#E4F7F3;--amber:#B26B00;--amber-soft:#FFF4E2;
+    --shadow:0 1px 2px rgba(10,37,64,.04),0 4px 12px rgba(10,37,64,.06);
+    --shadow-lg:0 4px 12px rgba(10,37,64,.06),0 20px 48px rgba(10,37,64,.12);
+    --radius:16px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5}
+  a{text-decoration:none;color:inherit}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+
+  /* nav */
+  nav{position:sticky;top:0;z-index:50;background:rgba(246,249,252,.8);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;height:66px;max-width:1080px;margin:0 auto;padding:0 24px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;letter-spacing:-.03em}
+  .brand svg{display:block}
+  .nav-links{display:flex;align-items:center;gap:8px}
+  .nav-links a.ghost{padding:9px 16px;font-weight:600;font-size:14.5px;color:var(--ink);border-radius:10px}
+  .nav-links a.ghost:hover{background:var(--surface)}
+  .btn{display:inline-block;border:none;border-radius:11px;padding:11px 20px;font-size:14.5px;font-weight:600;font-family:'Inter';cursor:pointer;transition:transform .06s,background .15s,box-shadow .15s;letter-spacing:-.01em}
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{background:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(99,91,255,.35)}
+  .btn-primary:hover{background:var(--primary-h)}
+  .btn-lg{padding:15px 28px;font-size:16px;border-radius:12px}
+
+  /* hero */
+  .hero{padding:72px 0 64px;position:relative;overflow:hidden}
+  .hero::before{content:"";position:absolute;top:-200px;right:-160px;width:520px;height:520px;border-radius:50%;
+    background:radial-gradient(circle,rgba(99,91,255,.12),transparent 68%);z-index:0}
+  .hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center;position:relative;z-index:1}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);color:var(--muted);
+    font-size:13px;font-weight:600;padding:6px 14px;border-radius:30px;box-shadow:var(--shadow);margin-bottom:22px}
+  .eyebrow .d{width:7px;height:7px;border-radius:50%;background:var(--teal)}
+  h1{font-size:52px;line-height:1.05;font-weight:900;letter-spacing:-.035em;margin-bottom:20px}
+  h1 .hl{color:var(--primary)}
+  .lede{font-size:19px;color:var(--muted);max-width:460px;margin-bottom:30px}
+  .hero-cta{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .hero-note{font-size:13.5px;color:var(--faint);margin-top:18px;display:flex;align-items:center;gap:7px}
+
+  /* hero mock card */
+  .mock{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:22px;box-shadow:var(--shadow-lg);max-width:360px;margin-left:auto}
+  .mock-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .mock-svc{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px}
+  .mock-svc .si{width:32px;height:32px;border-radius:9px;background:#25D366;display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px;box-shadow:var(--shadow)}
+  .mock-live{font-size:12px;font-weight:600;color:var(--teal);background:var(--teal-soft);padding:4px 10px;border-radius:20px}
+  .mock-num{display:flex;align-items:center;justify-content:space-between;background:var(--bg);border:1px solid var(--border-2);border-radius:11px;padding:13px 15px;margin-bottom:12px}
+  .mock-num .n{font-family:'JetBrains Mono';font-size:16px}
+  .mock-num .c{font-size:11px;font-weight:600;color:var(--muted);border:1px solid var(--border-2);background:#fff;padding:5px 10px;border-radius:8px}
+  .mock-code{text-align:center;padding:20px;background:var(--teal-soft);border:1px solid #B8EAE1;border-radius:12px}
+  .mock-code .l{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--teal);margin-bottom:8px}
+  .mock-code .v{font-family:'JetBrains Mono';font-size:34px;font-weight:700;letter-spacing:.14em;color:var(--ink)}
+  .mock-code .v span{opacity:0;animation:pop .4s forwards}
+  .mock-code .v span:nth-child(1){animation-delay:.3s}.mock-code .v span:nth-child(2){animation-delay:.42s}
+  .mock-code .v span:nth-child(3){animation-delay:.54s}.mock-code .v span:nth-child(4){animation-delay:.66s}
+  .mock-code .v span:nth-child(5){animation-delay:.78s}.mock-code .v span:nth-child(6){animation-delay:.9s}
+  @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* strip */
+  .strip{padding:26px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--surface)}
+  .strip-in{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:center}
+  .strip-in .lbl{font-size:12.5px;color:var(--faint);font-weight:600;width:100%;text-align:center;margin-bottom:2px}
+  .chip{font-size:13px;font-weight:600;color:var(--muted);background:var(--bg);border:1px solid var(--border);padding:7px 14px;border-radius:20px}
+
+  /* sections */
+  section.pad{padding:80px 0}
+  .sec-head{text-align:center;max-width:600px;margin:0 auto 52px}
+  .sec-head .kick{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--primary);margin-bottom:12px}
+  .sec-head h2{font-size:38px;font-weight:800;letter-spacing:-.03em;margin-bottom:14px}
+  .sec-head p{font-size:17px;color:var(--muted)}
+
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  .step{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;box-shadow:var(--shadow)}
+  .step .num{width:36px;height:36px;border-radius:10px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center;font-weight:800;font-family:'JetBrains Mono';margin-bottom:18px}
+  .step h3{font-size:18px;font-weight:700;margin-bottom:8px;letter-spacing:-.02em}
+  .step p{font-size:14.5px;color:var(--muted)}
+
+  .feat{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+  .fcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:26px;box-shadow:var(--shadow);display:flex;gap:16px}
+  .fcard .fi{width:44px;height:44px;border-radius:12px;flex-shrink:0;display:grid;place-items:center;background:var(--primary-soft)}
+  .fcard h3{font-size:16.5px;font-weight:700;margin-bottom:6px;letter-spacing:-.02em}
+  .fcard p{font-size:14px;color:var(--muted)}
+
+  .svc-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+  .svc-tile{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px 8px;text-align:center;box-shadow:var(--shadow);transition:transform .12s}
+  .svc-tile:hover{transform:translateY(-3px)}
+  .svc-tile .ti{width:40px;height:40px;border-radius:11px;margin:0 auto 9px;display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;box-shadow:var(--shadow)}
+  .svc-tile .tn{font-size:12px;font-weight:600;color:var(--muted)}
+
+  /* CTA */
+  .cta{background:linear-gradient(135deg,#635BFF,#8B85FF);border-radius:24px;padding:56px 40px;text-align:center;color:#fff;box-shadow:0 20px 48px rgba(99,91,255,.35)}
+  .cta h2{font-size:34px;font-weight:800;letter-spacing:-.03em;margin-bottom:12px}
+  .cta p{font-size:17px;opacity:.9;margin-bottom:28px;max-width:440px;margin-left:auto;margin-right:auto}
+  .cta .btn-primary{background:#fff;color:var(--primary);box-shadow:0 4px 14px rgba(0,0,0,.15)}
+  .cta .btn-primary:hover{background:#f4f3ff}
+
+  footer{border-top:1px solid var(--border);padding:40px 0;margin-top:20px}
+  .foot-in{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
+  .foot-links{display:flex;gap:22px;font-size:13.5px;color:var(--muted)}
+  .foot-links a:hover{color:var(--ink)}
+  .foot-copy{font-size:13px;color:var(--faint)}
+
+  @media(max-width:820px){
+    .hero-grid{grid-template-columns:1fr;gap:36px}
+    h1{font-size:40px}.mock{margin:0 auto}
+    .steps{grid-template-columns:1fr}.feat{grid-template-columns:1fr}
+    .svc-grid{grid-template-columns:repeat(4,1fr)}
+    .sec-head h2{font-size:30px}.nav-links a.ghost{display:none}
+  }
+  @media(prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-in">
+    <div class="brand">
+      <svg width="30" height="30" viewBox="0 0 128 128"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#635BFF"/><stop offset="1" stop-color="#8B85FF"/></linearGradient></defs><rect x="14" y="14" width="100" height="100" rx="28" fill="url(#g)"/><path d="M44 66 L59 81 L86 50" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/><circle cx="100" cy="28" r="8" fill="#06A594" stroke="#fff" stroke-width="3.5"/></svg>
+      Veripher
+    </div>
+    <div class="nav-links">
+      <a class="ghost" href="#how">How it works</a>
+      <a class="ghost" href="#services">Services</a>
+      <a class="ghost" href="account.html">Sign in</a>
+      <a class="btn btn-primary" href="account.html">Get started</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="eyebrow"><span class="d"></span> No SIM. No personal number.</div>
+      <h1>Verification codes,<br><span class="hl">without your real number.</span></h1>
+      <p class="lede">Get a temporary number for WhatsApp, Telegram, Google and 1000+ services. Receive the code in seconds. Pay with crypto, from anywhere in the world.</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary btn-lg" href="account.html">Create free account</a>
+        <a class="btn btn-lg" style="background:var(--surface);border:1px solid var(--border-2);color:var(--ink)" href="#how">See how it works</a>
+      </div>
+      <div class="hero-note">✓ &nbsp;Auto-refund if no code arrives &nbsp;·&nbsp; ✓ &nbsp;Codes in 30 sec – 5 min</div>
+    </div>
+
+    <div class="mock" aria-hidden="true">
+      <div class="mock-top">
+        <div class="mock-svc"><span class="si">WA</span> WhatsApp · UK</div>
+        <span class="mock-live">● live</span>
+      </div>
+      <div class="mock-num"><span class="n">+44 7350 690992</span><span class="c">Copy</span></div>
+      <div class="mock-code">
+        <div class="l">Verification code</div>
+        <div class="v"><span>0</span><span>9</span><span>1</span><span>3</span><span>6</span><span>3</span></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="strip">
+  <div class="wrap strip-in">
+    <span class="lbl">Get numbers for the services people actually use</span>
+    <span class="chip">WhatsApp</span><span class="chip">Telegram</span><span class="chip">Google</span>
+    <span class="chip">Instagram</span><span class="chip">OpenAI</span><span class="chip">Signal</span>
+    <span class="chip">TikTok</span><span class="chip">Discord</span><span class="chip">+1000 more</span>
+  </div>
+</div>
+
+<section class="pad" id="how">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="kick">How it works</div>
+      <h2>Three steps, under a minute</h2>
+      <p>No app to install, no SIM to buy. Everything happens in your browser.</p>
+    </div>
+    <div class="steps">
+      <div class="step"><div class="num">1</div><h3>Pick a service</h3><p>Choose the app you're verifying and the country you want the number from.</p></div>
+      <div class="step"><div class="num">2</div><h3>Get your number</h3><p>We assign you a real number instantly. Paste it into the app you're signing up for.</p></div>
+      <div class="step"><div class="num">3</div><h3>Receive the code</h3><p>Your verification code appears here in seconds. Copy it and you're done.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="pad" id="services" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="kick">Services</div>
+      <h2>Numbers for everything</h2>
+      <p>From social and messaging to shopping, AI tools, dating and email.</p>
+    </div>
+    <div class="svc-grid">
+      <div class="svc-tile"><div class="ti" style="background:#25D366">WA</div><div class="tn">WhatsApp</div></div>
+      <div class="svc-tile"><div class="ti" style="background:#2AABEE">TG</div><div class="tn">Telegram</div></div>
+      <div class="svc-tile"><div class="ti" style="background:#EA4335">GO</div><div class="tn">Google</div></div>
+      <div class="svc-tile"><div class="ti" style="background:#E1306C">IG</div><div class="tn">Instagram</div></div>
+      <div class="svc-tile"><div class="ti" style="background:#10A37F">AI</div><div class="tn">OpenAI</div></div>
+      <div class="svc-tile"><div class="ti" style="background:#3A76F0">SG</div><div class="tn">Signal</div></div>
+      <div class="svc-tile"><div class="ti" style="background:#010101">TT</div><div class="tn">TikTok</div></div>
+      <div class="svc-tile"><div class="ti" style="background:#5865F2">DC</div><div class="tn">Discord</div></div>
+      <div class="svc-tile"><div class="ti" style="background:#1DB954">SP</div><div class="tn">Spotify</div></div>
+      <div class="svc-tile"><div class="ti" style="background:#E2231A">RB</div><div class="tn">Roblox</div></div>
+      <div class="svc-tile"><div class="ti" style="background:#FF9900">AM</div><div class="tn">Amazon</div></div>
+      <div class="svc-tile"><div class="ti" style="background:#6D4AFF">PM</div><div class="tn">Proton</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="pad" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="kick">Why Veripher</div>
+      <h2>Built to be fast and private</h2>
+    </div>
+    <div class="feat">
+      <div class="fcard"><div class="fi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="#635BFF"/></svg></div><div><h3>Codes in seconds</h3><p>Real numbers from a live pool. Most codes land in under a minute, 24/7.</p></div></div>
+      <div class="fcard"><div class="fi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z" stroke="#635BFF" stroke-width="2" fill="none" stroke-linejoin="round"/></svg></div><div><h3>Your number stays private</h3><p>Use ours instead of yours. Keep your personal line off random sign-up forms.</p></div></div>
+      <div class="fcard"><div class="fi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#635BFF" stroke-width="2"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" stroke="#635BFF" stroke-width="1.6"/></svg></div><div><h3>Works worldwide</h3><p>Numbers from 150+ countries. Pay in USDT, BTC or 150+ coins — no bank needed.</p></div></div>
+      <div class="fcard"><div class="fi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 12l6 6L20 6" stroke="#635BFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><h3>No code, no charge</h3><p>If a verification code never arrives, you're refunded automatically. Simple.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="pad" style="padding-top:0">
+  <div class="wrap">
+    <div class="cta">
+      <h2>Get your first number today</h2>
+      <p>Create an account, top up with crypto, and verify any service in minutes.</p>
+      <a class="btn btn-primary btn-lg" href="account.html">Create free account</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-in">
+    <div class="brand" style="font-size:17px">
+      <svg width="24" height="24" viewBox="0 0 128 128"><defs><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#635BFF"/><stop offset="1" stop-color="#8B85FF"/></linearGradient></defs><rect x="14" y="14" width="100" height="100" rx="28" fill="url(#g2)"/><path d="M44 66 L59 81 L86 50" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/><circle cx="100" cy="28" r="8" fill="#06A594" stroke="#fff" stroke-width="3.5"/></svg>
+      Veripher
+    </div>
+    <div class="foot-links">
+      <a href="#how">How it works</a><a href="#services">Services</a>
+      <a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="mailto:support@veripher.com">Support</a>
+    </div>
+  </div>
+  <div class="wrap" style="margin-top:18px"><div class="foot-copy">© 2026 Veripher. Temporary numbers for account verification and privacy.</div></div>
+</footer>
+
+</body>
+</html>
