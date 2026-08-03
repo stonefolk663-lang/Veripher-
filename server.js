@@ -26,11 +26,22 @@ const {
    - WhatsApp + USA  -> 2x  (loss-leader, high demand)
    - everything else -> 3x, with a $0.50 minimum floor
    ============================================================ */
+const USD_TO_NGN_SERVER = 1600;
 function resalePrice(service, country, costUSD){
-  if(service === 'whatsapp' && country === 'usa'){
-    return +(costUSD * 2).toFixed(2);
+  // Special: WhatsApp Australia -> fixed ₦10,000 ($6.25) ...
+  if(service === 'whatsapp' && country === 'australia'){
+    const fixedUSD = 10000 / USD_TO_NGN_SERVER;          // = $6.25
+    // ...but never below cost + safe margin (never sell at a loss)
+    const safeMin = costUSD * 1.3;
+    return +(Math.max(fixedUSD, safeMin)).toFixed(2);
   }
-  return +(Math.max(costUSD * 3, 0.50)).toFixed(2);
+  // Special: WhatsApp USA -> 1.8x (loss-leader)
+  if(service === 'whatsapp' && country === 'usa'){
+    return +(costUSD * 1.8).toFixed(2);
+  }
+  // Option B tiered markup: under $2.80 -> 2.5x, $2.80+ -> 1.8x, $0.50 floor
+  const mult = costUSD >= 2.80 ? 1.8 : 2.5;
+  return +(Math.max(costUSD * mult, 0.50)).toFixed(2);
 }
 
 /* find the cheapest IN-STOCK operator cost for a service in 5sim price data */
