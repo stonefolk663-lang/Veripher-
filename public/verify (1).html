@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Veripher — Receive verification codes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#F6F9FC;--surface:#FFFFFF;--border:#E7EBF0;--border-2:#DDE3EC;--ink:#0A2540;--muted:#68758B;--faint:#94A0B4;--primary:#635BFF;--primary-h:#524ce6;--primary-soft:#EEEDFF;--teal:#06A594;--teal-soft:#E4F7F3;--amber:#B26B00;--amber-soft:#FFF4E2;--danger:#E2483D;--danger-soft:#FEF3F2;--shadow:0 1px 2px rgba(10,37,64,.04),0 4px 12px rgba(10,37,64,.06);--radius:16px}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;padding:24px 20px;display:flex;justify-content:center;align-items:flex-start;-webkit-font-smoothing:antialiased}
+  .app{width:100%;max-width:440px}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:20px;letter-spacing:-.03em}
+  .brand svg{display:block}
+  .wallet{font-size:13px;color:var(--muted);background:var(--surface);border:1px solid var(--border);padding:8px 13px;border-radius:10px;box-shadow:var(--shadow);font-weight:500;cursor:pointer;text-decoration:none}
+  .wallet b{color:var(--ink);font-weight:700;font-family:'JetBrains Mono'}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;margin-bottom:16px;box-shadow:var(--shadow)}
+  .eyebrow{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+  .eyebrow .n{display:grid;place-items:center;width:20px;height:20px;border-radius:6px;background:var(--primary-soft);color:var(--primary);font-size:11px;font-weight:700;font-family:'JetBrains Mono'}
+  .search{position:relative;margin-bottom:8px}
+  .search input{width:100%;background:var(--bg);border:1px solid var(--border-2);border-radius:11px;color:var(--ink);font-size:15px;font-family:'Inter';padding:13px 14px 13px 42px;transition:border-color .15s,box-shadow .15s}
+  .search input::placeholder{color:var(--faint)}
+  .search input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);background:#fff}
+  .search svg{position:absolute;left:14px;top:50%;transform:translateY(-50%)}
+  .list{max-height:280px;overflow-y:auto;margin:8px -8px 0;padding:0 8px}
+  .list::-webkit-scrollbar{width:6px}.list::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:3px}
+  .cat{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);padding:14px 4px 7px;position:sticky;top:0;background:var(--surface)}
+  .svc{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:11px;cursor:pointer;border:1.5px solid transparent;transition:background .12s,border-color .12s}
+  .svc:hover{background:var(--bg)}
+  .svc.sel{background:var(--primary-soft);border-color:var(--primary)}
+  .ic{width:34px;height:34px;border-radius:9px;flex-shrink:0;display:grid;place-items:center;font-weight:700;font-size:13px;color:#fff;box-shadow:var(--shadow)}
+  .svc .nm{flex:1;font-size:14.5px;font-weight:500}
+  .svc .pr{font-family:'JetBrains Mono';font-size:13px;color:var(--muted);font-weight:500}
+  .svc.sel .pr{color:var(--primary);font-weight:700}
+  .empty{text-align:center;color:var(--muted);font-size:13px;padding:24px}
+  label{display:block;font-size:13px;font-weight:600;color:var(--ink);margin:18px 0 8px 2px}
+  select{width:100%;appearance:none;background:var(--bg);color:var(--ink);border:1px solid var(--border-2);border-radius:11px;padding:13px 14px;font-size:15px;font-family:'Inter';cursor:pointer;transition:border-color .15s,box-shadow .15s;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2368758B' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
+  select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);background-color:#fff}
+  .price-row{display:flex;align-items:baseline;justify-content:space-between;padding:18px 2px 4px}
+  .price-label{font-size:14px;color:var(--muted)}
+  .price{font-family:'JetBrains Mono';font-weight:700;font-size:24px;letter-spacing:-.02em}
+  .btn{width:100%;border:none;border-radius:12px;padding:15px;font-size:15px;font-weight:600;font-family:'Inter';cursor:pointer;transition:transform .06s,background .15s,box-shadow .15s;letter-spacing:-.01em}
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{background:var(--primary);color:#fff;box-shadow:0 2px 6px rgba(99,91,255,.35)}
+  .btn-primary:hover{background:var(--primary-h)}
+  .btn-ghost{background:var(--surface);color:var(--ink);border:1px solid var(--border-2)}
+  .btn-ghost:hover{background:var(--bg)}
+  .btn-danger{background:var(--surface);color:var(--danger);border:1px solid #F3C9C5}
+  .btn-danger:hover{background:var(--danger-soft)}
+  .btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+  .btn-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .err{display:none;background:var(--danger-soft);border:1px solid #F3C9C5;color:var(--danger);font-size:13px;font-weight:500;padding:11px 14px;border-radius:10px;margin-top:12px}
+  .err.show{display:block}
+  .err a{color:var(--danger);font-weight:700}
+  .live{display:none}
+  .live.show{display:block;animation:rise .35s cubic-bezier(.2,.7,.3,1)}
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .number-field{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg);border:1px solid var(--border-2);border-radius:12px;padding:15px 16px;margin-bottom:14px}
+  .number{font-family:'JetBrains Mono';font-size:19px;font-weight:500;letter-spacing:.01em}
+  .copy{background:#fff;border:1px solid var(--border-2);color:var(--muted);border-radius:9px;padding:8px 12px;font-size:12px;cursor:pointer;font-weight:600;transition:all .15s;white-space:nowrap}
+  .copy:hover,.copy.done{color:var(--primary);border-color:var(--primary)}
+  .status{display:flex;align-items:center;gap:13px;padding:16px;background:var(--amber-soft);border:1px solid #F5E3C4;border-radius:12px;margin-bottom:14px}
+  .wave{display:flex;align-items:center;gap:3px;height:22px}
+  .wave span{width:3px;background:#E0952A;border-radius:2px;animation:w 1s ease-in-out infinite}
+  .wave span:nth-child(1){height:8px}.wave span:nth-child(2){height:16px;animation-delay:.12s}
+  .wave span:nth-child(3){height:22px;animation-delay:.24s}.wave span:nth-child(4){height:14px;animation-delay:.36s}
+  .wave span:nth-child(5){height:9px;animation-delay:.48s}
+  @keyframes w{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
+  .status-text{font-size:13.5px;color:var(--amber);font-weight:500}.status-text .timer{font-family:'JetBrains Mono';font-weight:700}
+  .code-box{display:none;text-align:center;padding:24px;background:var(--teal-soft);border:1px solid #B8EAE1;border-radius:12px;margin-bottom:14px;cursor:pointer}
+  .code-box.show{display:block;animation:rise .4s cubic-bezier(.2,.7,.3,1)}
+  .code-box .lbl{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);margin-bottom:10px}
+  .code{font-family:'JetBrains Mono';font-size:42px;font-weight:700;letter-spacing:.12em;color:var(--ink)}
+  .code-box .from{font-size:13px;color:var(--muted);margin-top:8px}
+  .tap-hint{font-size:12px;color:var(--faint);margin-top:10px}
+  footer{text-align:center;color:var(--faint);font-size:12px;margin-top:10px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 128 128"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#635BFF"/><stop offset="1" stop-color="#8B85FF"/></linearGradient></defs><rect x="14" y="14" width="100" height="100" rx="28" fill="url(#g)"/><path d="M44 66 L59 81 L86 50" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/><circle cx="100" cy="28" r="8" fill="#06A594" stroke="#fff" stroke-width="3.5"/></svg>
+      Veripher
+    </div>
+    <a class="wallet" href="account.html">Balance <b id="bal">$0.00</b></a>
+  </header>
+
+  <div class="card" id="chooser">
+    <div class="eyebrow"><span class="n">1</span> Choose a service</div>
+    <div class="search">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="#94A0B4" stroke-width="1.5"/><path d="M11 11l3 3" stroke="#94A0B4" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <input id="q" type="text" placeholder="Search 1000+ services…" autocomplete="off">
+    </div>
+    <div class="list" id="list"></div>
+    <label>Country</label>
+    <select id="country">
+      <option value="england">England 🇬🇧</option><option value="usa">USA 🇺🇸</option>
+      <option value="india">India 🇮🇳</option><option value="indonesia">Indonesia 🇮🇩</option>
+      <option value="philippines">Philippines 🇵🇭</option><option value="australia">Australia 🇦🇺</option><option value="france">France 🇫🇷</option>
+      <option value="southafrica">South Africa 🇿🇦</option><option value="germany">Germany 🇩🇪</option>
+    </select>
+    <div class="price-row">
+      <span class="price-label" id="priceLabel">Select a service</span>
+      <span class="price" id="price" style="color:var(--faint)">—</span>
+    </div>
+    <button class="btn btn-primary" id="getBtn" style="margin-top:12px" disabled>Get number</button>
+    <div class="err" id="buyErr"></div>
+  </div>
+
+  <div class="card live" id="liveCard">
+    <div class="eyebrow"><span class="n">2</span> Your number · <span id="liveService" style="color:var(--ink);font-weight:600">—</span></div>
+    <div class="number-field">
+      <span class="number" id="phone">—</span>
+      <button class="copy" id="copyNum">Copy</button>
+    </div>
+    <div class="status" id="statusBox">
+      <div class="wave"><span></span><span></span><span></span><span></span><span></span></div>
+      <div class="status-text">Waiting for SMS… expires in <span class="timer" id="timer">14:59</span></div>
+    </div>
+    <div class="code-box" id="codeBox">
+      <div class="lbl">Verification code</div>
+      <div class="code" id="codeVal">— — — — — —</div>
+      <div class="from" id="codeFrom">from service</div>
+      <div class="tap-hint">Tap to copy</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-danger" id="cancelBtn">Cancel &amp; refund</button>
+      <button class="btn btn-ghost" id="doneBtn" disabled>Done</button>
+    </div>
+  </div>
+  <footer>Codes arrive in 30 sec – 5 min. No code? Auto-refunded.</footer>
+</div>
+
+<script>
+const CATALOG={
+  "Messaging":[["WhatsApp","whatsapp",.55,"#25D366"],["Telegram","telegram",.60,"#2AABEE"],["Signal","signal",.20,"#3A76F0"],["WeChat","wechat",.35,"#07C160"],["Viber","viber",.12,"#7360F2"],["Line","line",.18,"#06C755"],["KakaoTalk","kakaotalk",.15,"#E5B800"],["Discord","discord",.10,"#5865F2"]],
+  "Social":[["Instagram / Threads","instagram",.20,"#E1306C"],["Facebook","facebook",.15,"#1877F2"],["TikTok","tiktok",.18,"#010101"],["Snapchat","snapchat",.22,"#E5B800"],["X / Twitter","twitter",.16,"#1DA1F2"],["Reddit","reddit",.10,"#FF4500"],["LinkedIn","linkedin",.14,"#0A66C2"]],
+  "Dating":[["Tinder","tinder",.30,"#FE3C72"],["Bumble","bumble",.28,"#E5A200"],["Badoo","badoo",.18,"#7B2FF7"],["Hinge","hinge",.25,"#8B5CF6"],["Match","match",.20,"#E50914"],["Grindr","grindr",.22,"#E5B800"]],
+  "Shopping":[["Amazon","amazon",.10,"#FF9900"],["AliExpress","aliexpress",.08,"#E62E04"],["Alibaba / Alipay","alipay",.12,"#1677FF"],["Shopee","shopee",.14,"#EE4D2D"],["Lazada","lazada",.14,"#0F146D"],["Mercari","mercari",.16,"#FF0211"],["eBay","ebay",.12,"#E53238"]],
+  "AI tools":[["OpenAI / ChatGPT","openai",.45,"#10A37F"],["Claude","claudeai",.30,"#D97757"],["Gemini","gemini",.30,"#8E75F0"],["Perplexity","perplexity",.28,"#20B8CD"]],
+  "Entertainment":[["Spotify","spotify",.14,"#1DB954"],["Netflix","netflix",.20,"#E50914"],["Roblox","roblox",.16,"#E2231A"],["Steam","steam",.15,"#1B2838"],["Twitch","twitch",.12,"#9146FF"]],
+  "Email":[["Google / Gmail","google",.40,"#EA4335"],["Yahoo Mail","yahoo",.12,"#6001D2"],["Proton Mail","protonmail",.18,"#6D4AFF"],["Outlook / Microsoft","microsoft",.10,"#0078D4"],["GMX","gmx",.10,"#1C449B"]],
+  "Rides & Food":[["Uber","uber",.16,"#010101"],["Grab","grabtaxi",.14,"#00B14F"],["Gojek","gojek",.14,"#00AA13"],["DoorDash","doordash",.15,"#FF3008"],["Deliveroo","deliveroo",.14,"#00CCBC"],["Bolt","bolt",.13,"#34D186"]],
+  "Surveys & research":[["Swagbucks","swagbucks",.12,"#2C9AD9"],["YouGov","yougovshopper",.12,"#FF412C"],["Ipsos iSay","ipsosisay",.12,"#00A0E3"],["Prime Opinion","primeopinion",.12,"#5B2E91"],["Prodege","prodege",.12,"#00B0F0"]],
+  "Finance (higher risk)":[["PayPal","paypal",.35,"#003087"],["Wise","wise",.25,"#37517E"],["Coinbase","coinbase",.30,"#0052FF"],["Venmo","venmo",.28,"#3D95CE"]]
+};
+const MARKUP=3.1, USD_TO_NGN=1380;
+const $=id=>document.getElementById(id);
+const token=()=>localStorage.getItem('veripher_token');
+let selected=null, order=null, timerInt=null, pollInt=null, secs=15*60;
+
+/* must be logged in */
+if(!token()) location.href='account.html';
+
+/* load real balance */
+async function loadBalance(){
+  try{ const r=await fetch('/api/me',{headers:{Authorization:'Bearer '+token()}});
+    if(r.ok){ const d=await r.json(); $('bal').textContent='$'+Number(d.balanceUSD).toFixed(2); }
+    else if(r.status===401){ localStorage.removeItem('veripher_token'); location.href='account.html'; }
+  }catch(e){}
+}
+loadBalance();
+
+function priceOf(usd){return usd*MARKUP;}
+/* Simple Icons slug overrides where they differ from the 5sim product slug */
+const ICON_SLUG = {
+  twitter:'x', gemini:'googlegemini', microsoft:'microsoftoutlook',
+  google:'google', grabtaxi:'grab', yougovshopper:'yougov',
+  claudeai:'anthropic', alipay:'alipay', 'openai':'openai'
+};
+function iconSlug(slug){ return ICON_SLUG[slug] || slug; }
+function initials(n){return n.replace(/[^A-Za-z0-9 ].*/,'').trim().slice(0,2).toUpperCase();}
+function tileHTML(nm,slug,color){
+  const ic = iconSlug(slug);
+  // white logo on the brand-colour tile; if it fails to load, show lettered fallback
+  return `<div class="ic" style="background:${color}">`
+    + `<img src="https://cdn.simpleicons.org/${ic}/white" alt="" width="18" height="18" `
+    + `onerror="this.style.display='none';this.parentNode.textContent='${initials(nm)}'">`
+    + `</div>`;
+}
+function showErr(msg){$('buyErr').innerHTML=msg;$('buyErr').classList.add('show');}
+function clrErr(){$('buyErr').classList.remove('show');}
+
+function render(filter=""){
+  const f=filter.toLowerCase(), list=$('list'); list.innerHTML=""; let any=false;
+  for(const [cat,items] of Object.entries(CATALOG)){
+    const m=items.filter(([nm])=>nm.toLowerCase().includes(f)); if(!m.length)continue; any=true;
+    const h=document.createElement('div'); h.className='cat'; h.textContent=cat; list.appendChild(h);
+    for(const [nm,slug,usd,color] of m){
+      const row=document.createElement('div');
+      row.className='svc'+(selected&&selected.slug===slug?' sel':'');
+      row.innerHTML=`${tileHTML(nm,slug,color)}<div class="nm">${nm}</div><div class="pr">~$${priceOf(usd).toFixed(2)}</div>`;
+      row.onclick=()=>{selected={nm,slug,usd};render(filter);syncPrice();};
+      list.appendChild(row);
+    }
+  }
+  if(!any) list.innerHTML='<div class="empty">No service matches that.</div>';
+}
+function syncPrice(){ if(!selected)return;
+  $('priceLabel').textContent='Est. price · '+selected.nm;
+  $('price').textContent='~$'+priceOf(selected.usd).toFixed(2);
+  $('price').style.color='var(--ink)'; $('getBtn').disabled=false;
+}
+$('q').addEventListener('input',e=>render(e.target.value)); render();
+
+/* ---- buy a real number ---- */
+$('getBtn').addEventListener('click',async()=>{
+  clrErr(); $('getBtn').disabled=true; $('getBtn').textContent='Getting number…';
+  try{
+    const r=await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token()},body:JSON.stringify({service:selected.slug,country:$('country').value})});
+    const d=await r.json();
+    if(!r.ok){
+      if(r.status===402) showErr('Not enough balance. <a href="account.html">Top up →</a>');
+      else if(r.status===401){ location.href='account.html'; return; }
+      else showErr(d.error||'Could not get a number.');
+      $('getBtn').disabled=false; $('getBtn').textContent='Get number'; return;
+    }
+    order={id:d.id,phone:d.phone,service:selected.nm};
+    $('liveService').textContent=order.service; $('phone').textContent=order.phone;
+    $('chooser').style.display='none'; $('liveCard').classList.add('show');
+    loadBalance(); startTimer(); startPolling();
+  }catch(e){ showErr('Cannot reach the server.'); $('getBtn').disabled=false; $('getBtn').textContent='Get number'; }
+});
+
+function startTimer(){secs=15*60; timerInt=setInterval(()=>{secs--;
+  $('timer').textContent=String(Math.floor(secs/60)).padStart(2,'0')+':'+String(secs%60).padStart(2,'0');
+  if(secs<=0){clearInterval(timerInt);}},1000);}
+
+/* ---- poll backend for the code every 3s ---- */
+function startPolling(){
+  pollInt=setInterval(async()=>{
+    try{
+      const r=await fetch('/api/orders/'+order.id,{headers:{Authorization:'Bearer '+token()}});
+      const d=await r.json();
+      if(d.status==='RECEIVED'&&d.code){ clearInterval(pollInt); showCode(d.code,d.sender||order.service); }
+      else if(d.status==='CANCELED'||d.status==='TIMEOUT'){ clearInterval(pollInt); }
+    }catch(e){}
+  },3000);
+}
+function showCode(code,sender){clearInterval(timerInt);
+  $('statusBox').style.display='none'; $('codeVal').textContent=code;
+  $('codeFrom').textContent='from '+sender; $('codeBox').classList.add('show');
+  $('doneBtn').disabled=false; $('cancelBtn').style.display='none';}
+
+$('copyNum').onclick=()=>{navigator.clipboard?.writeText((order.phone||'').replace(/\s/g,''));
+  $('copyNum').textContent='Copied'; $('copyNum').classList.add('done');
+  setTimeout(()=>{$('copyNum').textContent='Copy';$('copyNum').classList.remove('done');},1500);};
+$('codeBox').onclick=()=>{navigator.clipboard?.writeText($('codeVal').textContent);
+  const l=$('codeBox').querySelector('.lbl'); const t=l.textContent; l.textContent='Copied ✓';
+  setTimeout(()=>l.textContent=t,1500);};
+
+$('cancelBtn').onclick=async()=>{
+  clearInterval(timerInt); clearInterval(pollInt);
+  try{ await fetch('/api/orders/'+order.id+'/cancel',{method:'POST',headers:{Authorization:'Bearer '+token()}}); }catch(e){}
+  loadBalance(); reset();
+};
+$('doneBtn').onclick=async()=>{
+  try{ await fetch('/api/orders/'+order.id+'/finish',{method:'POST',headers:{Authorization:'Bearer '+token()}}); }catch(e){}
+  reset();
+};
+function reset(){clearInterval(pollInt);clearInterval(timerInt);
+  $('liveCard').classList.remove('show'); $('codeBox').classList.remove('show');
+  $('statusBox').style.display='flex'; $('cancelBtn').style.display=''; $('doneBtn').disabled=true;
+  $('chooser').style.display=''; $('getBtn').textContent='Get number';
+  selected=null; render(); $('priceLabel').textContent='Select a service';
+  $('price').textContent='—'; $('price').style.color='var(--faint)'; $('getBtn').disabled=true;}
+</script>
+</body>
+</html>
