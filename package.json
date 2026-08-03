@@ -1,0 +1,19 @@
+{
+  "name": "veripher",
+  "version": "1.0.0",
+  "description": "Veripher — temporary numbers for verification",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "node-fetch": "^2.7.0",
+    "pg": "^8.11.5"
+  }
+}

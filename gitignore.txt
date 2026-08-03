@@ -1,0 +1,8 @@
+node_modules/
+veripher.db
+veripher.db-shm
+veripher.db-wal
+*.log
+.env
+pgtest.js
+smoketest.js
