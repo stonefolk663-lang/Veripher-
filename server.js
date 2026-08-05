@@ -1,7 +1,9 @@
 /* ============================================================
    Veripher — backend (Node.js + Express + PostgreSQL)
    Env vars (set in Render): FIVESIM_TOKEN, NOWPAY_KEY,
-   NOWPAY_IPN_SECRET, JWT_SECRET, BASE_URL, DATABASE_URL
+   NOWPAY_IPN_SECRET, FLW_SECRET_KEY, FLW_WEBHOOK_HASH,
+   JWT_SECRET, BASE_URL, DATABASE_URL
+   *** THIS VERSION INCLUDES FLUTTERWAVE BANK TRANSFER ***
    ============================================================ */
 
 const express = require('express');
