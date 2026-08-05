@@ -18,6 +18,7 @@ app.use(express.json());
 
 const {
   FIVESIM_TOKEN, NOWPAY_KEY, NOWPAY_IPN_SECRET,
+  FLW_SECRET_KEY, FLW_WEBHOOK_HASH,
   JWT_SECRET = 'dev-secret', BASE_URL = 'http://localhost:3000'
 } = process.env;
 
@@ -159,6 +160,76 @@ function sortKeys(o){
     return Object.keys(o).sort().reduce((a,k)=>(a[k]=sortKeys(o[k]),a),{});
   return o;
 }
+
+
+/* ============================================================
+   FLUTTERWAVE  (Naira bank transfer / card -> wallet top-up)
+   Rate: ₦1,600 = $1.  Customer pays Naira, wallet credited in USD.
+   ============================================================ */
+const NGN_RATE = 1600;
+const MIN_NGN  = 1000;   // minimum naira top-up
+
+app.post('/api/wallet/topup-ngn', auth, async (req,res)=>{
+  const amountNGN = Math.round(parseFloat(req.body.amountNGN));
+  if(!amountNGN || amountNGN < MIN_NGN)
+    return res.status(400).json({ error:'Minimum top-up is ₦'+MIN_NGN.toLocaleString() });
+
+  const ref = 'flw_' + crypto.randomBytes(8).toString('hex');
+  const amountUSD = +(amountNGN / NGN_RATE).toFixed(2);   // credit value
+  // store as a pending invoice (amount in USD, like crypto ones)
+  await pool.query('INSERT INTO invoices (order_id, email, amount_usd) VALUES ($1,$2,$3)',
+    [ref, req.email, amountUSD]);
+
+  // create a Flutterwave hosted payment
+  const r = await fetch('https://api.flutterwave.com/v3/payments', {
+    method:'POST',
+    headers:{ 'Authorization':'Bearer '+FLW_SECRET_KEY, 'Content-Type':'application/json' },
+    body: JSON.stringify({
+      tx_ref: ref,
+      amount: amountNGN,
+      currency: 'NGN',
+      redirect_url: BASE_URL + '/account.html',
+      customer: { email: req.email },
+      payment_options: 'banktransfer',
+      customizations: { title: 'Veripher wallet top-up', description: 'Add funds to your wallet' }
+    })
+  });
+  const data = await r.json();
+  if(data.status !== 'success' || !data.data || !data.data.link)
+    return res.status(502).json({ error:'Could not start payment, try again' });
+  res.json({ link: data.data.link });
+});
+
+/* Flutterwave webhook -> verify -> credit wallet */
+app.post('/api/ipn/flutterwave', express.json(), async (req,res)=>{
+  // verify the request is really from Flutterwave
+  const sig = req.headers['verif-hash'];
+  if(!sig || sig !== FLW_WEBHOOK_HASH) return res.status(401).send('bad signature');
+
+  const ev = req.body;
+  const ref = ev && ev.data && ev.data.tx_ref;
+  const status = ev && ev.data && ev.data.status;
+
+  if(ref && status === 'successful'){
+    // double-check with Flutterwave that this payment truly succeeded
+    const vr = await fetch('https://api.flutterwave.com/v3/transactions/'+ev.data.id+'/verify', {
+      headers:{ 'Authorization':'Bearer '+FLW_SECRET_KEY }
+    });
+    const vd = await vr.json();
+    if(vd.status === 'success' && vd.data && vd.data.status === 'successful'){
+      const inv = (await pool.query('SELECT * FROM invoices WHERE order_id=$1 AND credited=false',[ref])).rows[0];
+      if(inv){
+        // safety: make sure the amount paid matches what we expected (₦)
+        const expectedNGN = Math.round(inv.amount_usd * NGN_RATE);
+        if(Number(vd.data.amount) >= expectedNGN - 1){
+          await pool.query('UPDATE invoices SET credited=true WHERE order_id=$1',[ref]);
+          await pool.query('UPDATE users SET balance_usd = balance_usd + $1 WHERE email=$2',[inv.amount_usd, inv.email]);
+        }
+      }
+    }
+  }
+  res.status(200).send('ok');
+});
 
 /* ---------- orders (buy a number) ---------- */
 app.post('/api/orders', auth, async (req,res)=>{
