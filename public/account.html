@@ -105,12 +105,18 @@
       <div class="sub">Choose how you'd like to top up your wallet.</div>
 
       <!-- Bank transfer (primary, coming soon) -->
-      <div class="method soon">
+      <div class="method active" id="bankMethod">
         <div class="method-top">
           <div class="method-name"><span class="method-ic bank">🏦</span> Bank Transfer (Naira)</div>
-          <span class="badge soon">Coming soon</span>
+          <span class="badge live">Available</span>
         </div>
-        <div class="method-desc">Pay in ₦ from any Nigerian bank. Instant wallet top-up.</div>
+        <div class="method-desc">Pay in ₦ from any Nigerian bank or card. Instant wallet top-up.</div>
+      </div>
+      <div id="bankBody" style="margin-top:6px">
+        <div class="custom" style="margin-top:4px"><span>₦</span><input type="number" id="ngnAmt" placeholder="Amount in Naira (min ₦1,000)" min="1000"></div>
+        <div id="ngnPreview" class="minnote" style="text-align:left;margin:8px 2px 0"></div>
+        <button class="btn btn-primary" id="bankPayBtn" style="margin-top:12px">Pay with bank transfer</button>
+        <div class="err" id="bankErr"></div>
       </div>
 
       <!-- Crypto (working) -->
@@ -205,6 +211,44 @@ $('logoutLink').onclick=()=>{ localStorage.removeItem('veripher_token'); locatio
 
 function showWallet(b){ $('authCard').classList.add('hide'); $('walletView').classList.remove('hide'); $('logoutLink').classList.remove('hide'); setBalance(b||0); }
 function setBalance(usd){ const u=Number(usd); $('balNgn').textContent=ngn(u); $('balUsd').textContent='≈ $'+u.toFixed(2); }
+
+
+/* ---- switch between Bank and Crypto methods ---- */
+function selectMethod(which){
+  const bank=$('bankMethod'), crypto=$('cryptoMethod'), bankBody=$('bankBody'), cryptoBody=$('cryptoBody');
+  if(which==='bank'){ bank.classList.add('active'); crypto.classList.remove('active'); bankBody.style.display=''; cryptoBody.style.display='none'; }
+  else { crypto.classList.add('active'); bank.classList.remove('active'); cryptoBody.style.display=''; bankBody.style.display='none'; }
+}
+$('bankMethod').onclick=()=>selectMethod('bank');
+$('cryptoMethod').onclick=()=>selectMethod('crypto');
+selectMethod('bank');   // Naira is the default/primary method
+
+/* live ₦ preview + validation */
+const NGN_RATE_UI=1600;
+$('ngnAmt').addEventListener('input', ()=>{
+  const n=parseFloat($('ngnAmt').value);
+  if(n>=1000){ $('ngnPreview').textContent='You will be credited $'+(n/NGN_RATE_UI).toFixed(2)+' to your wallet.'; }
+  else { $('ngnPreview').textContent=''; }
+  clrErr($('bankErr'));
+});
+
+/* Bank transfer pay -> Flutterwave */
+$('bankPayBtn').onclick=async()=>{
+  clrErr($('bankErr'));
+  const amountNGN=parseFloat($('ngnAmt').value);
+  if(!amountNGN || amountNGN<1000){ showErr($('bankErr'),'Minimum top-up is ₦1,000.'); return; }
+  $('bankPayBtn').disabled=true; $('bankPayBtn').textContent='Starting payment…';
+  const controller=new AbortController(); const t=setTimeout(()=>controller.abort(),20000);
+  try{
+    const r=await fetch('/api/wallet/topup-ngn',{method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+token()},
+      body:JSON.stringify({amountNGN}), signal:controller.signal});
+    const d=await r.json().catch(()=>({}));
+    if(r.ok && d.link){ window.location=d.link; return; }
+    showErr($('bankErr'), d.error || 'Could not start payment. Try again.');
+  }catch(e){ showErr($('bankErr'), e.name==='AbortError'?'Timed out. Try again.':'Cannot reach the server.'); }
+  finally{ clearTimeout(t); $('bankPayBtn').disabled=false; $('bankPayBtn').textContent='Pay with bank transfer'; }
+};
 
 /* ---- crypto pay: FIXED so it never hangs ---- */
 $('payBtn').onclick=async()=>{
