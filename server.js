@@ -31,20 +31,28 @@ const {
    ============================================================ */
 const USD_TO_NGN_SERVER = 1600;
 function resalePrice(service, country, costUSD){
-  // Special: WhatsApp Australia -> fixed ₦10,000 ($6.25) ...
-  if(service === 'whatsapp' && country === 'australia'){
-    const fixedUSD = 10000 / USD_TO_NGN_SERVER;          // = $6.25
-    // ...but never below cost + safe margin (never sell at a loss)
-    const safeMin = costUSD * 1.3;
-    return +(Math.max(fixedUSD, safeMin)).toFixed(2);
-  }
-  // Special: WhatsApp USA -> 1.8x (loss-leader)
+  const RATE = USD_TO_NGN_SERVER;               // 1600
+  const CAP_NGN = 10000;                         // safe ceiling
+  let priceUSD;
+
+  // --- special fixed prices ---
   if(service === 'whatsapp' && country === 'usa'){
-    return +(costUSD * 1.8).toFixed(2);
+    priceUSD = 2000 / RATE;                       // fixed ₦2,000
+  } else if(service === 'whatsapp' && country === 'australia'){
+    priceUSD = 10000 / RATE;                      // fixed ₦10,000
+  } else {
+    // --- Option B tiered markup ---
+    const mult = costUSD >= 2.80 ? 1.8 : 2.5;
+    priceUSD = Math.max(costUSD * mult, 0.50);
   }
-  // Option B tiered markup: under $2.80 -> 2.5x, $2.80+ -> 1.8x, $0.50 floor
-  const mult = costUSD >= 2.80 ? 1.8 : 2.5;
-  return +(Math.max(costUSD * mult, 0.50)).toFixed(2);
+
+  // --- SAFE ₦10k cap: cap to ₦10k, but never below a safe margin over cost ---
+  const capUSD  = CAP_NGN / RATE;                 // $6.25
+  const safeMin = costUSD * 1.3;                  // never sell under cost+30%
+  if(priceUSD > capUSD){
+    priceUSD = Math.max(capUSD, safeMin);         // cap, unless that would lose money
+  }
+  return +priceUSD.toFixed(2);
 }
 
 /* find the cheapest IN-STOCK operator cost for a service in 5sim price data */
@@ -169,12 +177,12 @@ function sortKeys(o){
    Rate: ₦1,600 = $1.  Customer pays Naira, wallet credited in USD.
    ============================================================ */
 const NGN_RATE = 1600;
-const MIN_NGN  = 1000;   // minimum naira top-up
+const MIN_NGN  = 500;   // minimum naira top-up
 
 app.post('/api/wallet/topup-ngn', auth, async (req,res)=>{
   const amountNGN = Math.round(parseFloat(req.body.amountNGN));
   if(!amountNGN || amountNGN < MIN_NGN)
-    return res.status(400).json({ error:'Minimum top-up is ₦'+MIN_NGN.toLocaleString() });
+    return res.status(400).json({ error:'Minimum deposit is ₦500' });
 
   const ref = 'flw_' + crypto.randomBytes(8).toString('hex');
   const amountUSD = +(amountNGN / NGN_RATE).toFixed(2);   // credit value
@@ -231,6 +239,53 @@ app.post('/api/ipn/flutterwave', express.json(), async (req,res)=>{
     }
   }
   res.status(200).send('ok');
+});
+
+
+/* verify-on-return: customer lands back from Flutterwave, we CONFIRM with FLW and credit.
+   This does NOT depend on the webhook arriving — more reliable. */
+app.get('/api/wallet/verify-ngn', auth, async (req,res)=>{
+  const tx_ref = req.query.tx_ref;
+  const tx_id  = req.query.transaction_id;   // Flutterwave passes this on redirect
+  if(!tx_ref && !tx_id) return res.status(400).json({ error:'missing reference' });
+
+  // find our pending invoice by ref
+  let inv = null;
+  if(tx_ref){
+    inv = (await pool.query('SELECT * FROM invoices WHERE order_id=$1', [tx_ref])).rows[0];
+  }
+  if(!inv) return res.json({ ok:false, credited:false });
+  if(inv.credited) return res.json({ ok:true, credited:true, already:true });
+
+  // ask Flutterwave directly whether this really succeeded
+  let vd = null;
+  if(tx_id){
+    const vr = await fetch('https://api.flutterwave.com/v3/transactions/'+tx_id+'/verify', {
+      headers:{ 'Authorization':'Bearer '+FLW_SECRET_KEY }
+    });
+    vd = await vr.json();
+  } else {
+    // fallback: verify by reference
+    const vr = await fetch('https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref='+encodeURIComponent(tx_ref), {
+      headers:{ 'Authorization':'Bearer '+FLW_SECRET_KEY }
+    });
+    vd = await vr.json();
+  }
+
+  const okPaid = vd && vd.status==='success' && vd.data && vd.data.status==='successful';
+  const expectedNGN = Math.round(inv.amount_usd * NGN_RATE);
+  const paidEnough = okPaid && Number(vd.data.amount) >= expectedNGN - 1
+                     && (vd.data.currency === 'NGN');
+
+  if(paidEnough){
+    // credit once
+    const upd = await pool.query('UPDATE invoices SET credited=true WHERE order_id=$1 AND credited=false', [inv.order_id]);
+    if(upd.rowCount === 1){
+      await pool.query('UPDATE users SET balance_usd = balance_usd + $1 WHERE email=$2', [inv.amount_usd, inv.email]);
+    }
+    return res.json({ ok:true, credited:true, amountUSD: inv.amount_usd });
+  }
+  res.json({ ok:false, credited:false });
 });
 
 /* ---------- orders (buy a number) ---------- */
