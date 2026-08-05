@@ -113,8 +113,8 @@
         <div class="method-desc">Pay in ₦ from any Nigerian bank or card. Instant wallet top-up.</div>
       </div>
       <div id="bankBody" style="margin-top:6px">
-        <div class="custom" style="margin-top:4px"><span>₦</span><input type="number" id="ngnAmt" placeholder="Amount in Naira (min ₦1,000)" min="1000"></div>
-        <div id="ngnPreview" class="minnote" style="text-align:left;margin:8px 2px 0"></div>
+        <div class="custom" style="margin-top:4px"><span>₦</span><input type="number" id="ngnAmt" placeholder="Amount in Naira (min ₦500)" min="500"></div>
+        <div class="minnote" style="text-align:left;margin:8px 2px 0">Minimum deposit ₦500</div>
         <button class="btn btn-primary" id="bankPayBtn" style="margin-top:12px">Pay with bank transfer</button>
         <div class="err" id="bankErr"></div>
       </div>
@@ -174,7 +174,32 @@ function buildAmounts(){
 }
 buildAmounts();
 
-window.addEventListener('load', async ()=>{
+
+/* ---- handle return from Flutterwave: verify & credit ---- */
+async function checkFlutterwaveReturn(){
+  const p=new URLSearchParams(location.search);
+  const tx_ref=p.get('tx_ref'); const tx_id=p.get('transaction_id'); const status=p.get('status');
+  if(!tx_ref) return;
+  // clean the URL so refreshes don't re-trigger
+  const clean=location.pathname; 
+  if(!token()){ history.replaceState({},'',clean); return; }
+  try{
+    const q=new URLSearchParams(); if(tx_ref)q.set('tx_ref',tx_ref); if(tx_id)q.set('transaction_id',tx_id);
+    const r=await fetch('/api/wallet/verify-ngn?'+q.toString(),{headers:{Authorization:'Bearer '+token()}});
+    const d=await r.json();
+    if(d.credited){
+      // refresh balance and tell the user
+      const me=await fetch('/api/me',{headers:{Authorization:'Bearer '+token()}});
+      if(me.ok){ const b=await me.json(); showWallet(b.balanceUSD); }
+      setTimeout(()=>alert('✓ Payment received — your wallet has been topped up.'),300);
+    } else if(status==='cancelled'){
+      // do nothing
+    }
+  }catch(e){}
+  history.replaceState({},'',clean);
+}
+
+window.addEventListener('load', async ()=>{ checkFlutterwaveReturn();
   if(!token()) return;
   try{
     const r=await fetch('/api/me',{headers:{Authorization:'Bearer '+token()}});
@@ -226,9 +251,6 @@ selectMethod('bank');   // Naira is the default/primary method
 /* live ₦ preview + validation */
 const NGN_RATE_UI=1600;
 $('ngnAmt').addEventListener('input', ()=>{
-  const n=parseFloat($('ngnAmt').value);
-  if(n>=1000){ $('ngnPreview').textContent='You will be credited $'+(n/NGN_RATE_UI).toFixed(2)+' to your wallet.'; }
-  else { $('ngnPreview').textContent=''; }
   clrErr($('bankErr'));
 });
 
@@ -236,7 +258,7 @@ $('ngnAmt').addEventListener('input', ()=>{
 $('bankPayBtn').onclick=async()=>{
   clrErr($('bankErr'));
   const amountNGN=parseFloat($('ngnAmt').value);
-  if(!amountNGN || amountNGN<1000){ showErr($('bankErr'),'Minimum top-up is ₦1,000.'); return; }
+  if(!amountNGN || amountNGN<500){ showErr($('bankErr'),'Minimum deposit is ₦500.'); return; }
   $('bankPayBtn').disabled=true; $('bankPayBtn').textContent='Starting payment…';
   const controller=new AbortController(); const t=setTimeout(()=>controller.abort(),20000);
   try{
