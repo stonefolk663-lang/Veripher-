@@ -38,6 +38,8 @@ function resalePrice(service, country, costUSD){
   // --- special fixed prices ---
   if(service === 'whatsapp' && country === 'usa'){
     priceUSD = 2000 / RATE;                       // fixed ₦2,000
+  } else if(service === 'telegram' && country === 'usa'){
+    priceUSD = 3000 / RATE;                       // fixed ₦3,000
   } else if(service === 'whatsapp' && country === 'australia'){
     priceUSD = 10000 / RATE;                      // fixed ₦10,000
   } else {
@@ -303,14 +305,24 @@ app.post('/api/orders', auth, async (req,res)=>{
 
   console.log('BUY requested | service=', service, '| country=', country, '| user=', req.email);
   const prices = await fivesim(`/guest/prices?country=${country}&product=${service}`);
-  let operator = 'any', cheapest = Infinity;
+  const MIN_RATE = 15;                          // skip only near-dead operators
+  let operator = 'any', cheapest = Infinity;    // best pick that clears the success bar
+  let fbOperator = 'any', fbCheapest = Infinity; // fallback: cheapest overall in stock
   try {
     const ops = prices[country][service];
-    console.log('BUY operators found:', ops ? Object.keys(ops).length : 'NONE', ops ? JSON.stringify(ops).slice(0,300) : '');
+    console.log('BUY operators found:', ops ? Object.keys(ops).length : 'NONE', ops ? JSON.stringify(ops).slice(0,400) : '');
     for(const [name, info] of Object.entries(ops)){
-      if(info.count > 0 && info.cost < cheapest){ cheapest = info.cost; operator = name; }
+      if(!info || info.count <= 0) continue;                 // must be in stock
+      // fallback tracker (cheapest in stock, ignoring success)
+      if(info.cost < fbCheapest){ fbCheapest = info.cost; fbOperator = name; }
+      // success rate: use best available recent window; if no data, treat as passing (don't exclude good cheap ones)
+      const rate = (info.rate ?? info.rate24 ?? info.rate168 ?? null);
+      const passes = (rate === null || rate === 0) ? (info.rate24 == null && info.rate168 == null) : rate >= MIN_RATE;
+      if(passes && info.cost < cheapest){ cheapest = info.cost; operator = name; }
     }
   } catch(e){ console.log('BUY price-parse error:', e.message, '| raw:', JSON.stringify(prices).slice(0,200)); }
+  // if nothing cleared the bar, fall back to cheapest in-stock so we still offer a number
+  if(operator === 'any' && fbOperator !== 'any'){ operator = fbOperator; cheapest = fbCheapest; console.log('BUY fallback to cheapest in-stock'); }
   console.log('BUY chosen operator:', operator, '| cost:', cheapest);
   if(operator === 'any')
     return res.status(400).json({ error:'No numbers available right now, try another country' });
