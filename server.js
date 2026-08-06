@@ -185,7 +185,7 @@ app.post('/api/wallet/topup-ngn', auth, async (req,res)=>{
     return res.status(400).json({ error:'Minimum deposit is ₦500' });
 
   const ref = 'flw_' + crypto.randomBytes(8).toString('hex');
-  const amountUSD = +(amountNGN / NGN_RATE).toFixed(2);   // credit value
+  const amountUSD = +(amountNGN / NGN_RATE).toFixed(4);   // credit value (4dp avoids rounding gaps)
   // store as a pending invoice (amount in USD, like crypto ones)
   await pool.query('INSERT INTO invoices (order_id, email, amount_usd) VALUES ($1,$2,$3)',
     [ref, req.email, amountUSD]);
@@ -231,9 +231,11 @@ app.post('/api/ipn/flutterwave', express.json(), async (req,res)=>{
       if(inv){
         // safety: make sure the amount paid matches what we expected (₦)
         const expectedNGN = Math.round(inv.amount_usd * NGN_RATE);
-        if(Number(vd.data.amount) >= expectedNGN - 1){
+        const paidNGN = Number(vd.data.amount);
+        if(vd.data.currency==='NGN' && paidNGN >= expectedNGN - 20){
+          const creditUSD = +(paidNGN / NGN_RATE).toFixed(4);
           await pool.query('UPDATE invoices SET credited=true WHERE order_id=$1',[ref]);
-          await pool.query('UPDATE users SET balance_usd = balance_usd + $1 WHERE email=$2',[inv.amount_usd, inv.email]);
+          await pool.query('UPDATE users SET balance_usd = balance_usd + $1 WHERE email=$2',[creditUSD, inv.email]);
         }
       }
     }
@@ -277,17 +279,20 @@ app.get('/api/wallet/verify-ngn', auth, async (req,res)=>{
   const expectedNGN = Math.round(inv.amount_usd * NGN_RATE);
   const paidAmt = vd && vd.data ? Number(vd.data.amount) : null;
   const paidCur = vd && vd.data ? vd.data.currency : null;
-  const paidEnough = okPaid && paidAmt >= expectedNGN - 1 && (paidCur === 'NGN');
+  // allow a small tolerance so naira/dollar rounding never blocks a genuine payment
+  const paidEnough = okPaid && paidCur === 'NGN' && paidAmt >= (expectedNGN - 20);
   console.log('VERIFY-NGN result | flwStatus=', vd&&vd.status, '| txStatus=', vd&&vd.data&&vd.data.status,
               '| paid=', paidAmt, paidCur, '| expected=', expectedNGN, '| willCredit=', paidEnough);
 
   if(paidEnough){
     // credit once
+    const creditUSD = +(paidAmt / NGN_RATE).toFixed(4);   // credit exactly what they paid
     const upd = await pool.query('UPDATE invoices SET credited=true WHERE order_id=$1 AND credited=false', [inv.order_id]);
     if(upd.rowCount === 1){
-      await pool.query('UPDATE users SET balance_usd = balance_usd + $1 WHERE email=$2', [inv.amount_usd, inv.email]);
+      await pool.query('UPDATE users SET balance_usd = balance_usd + $1 WHERE email=$2', [creditUSD, inv.email]);
+      console.log('VERIFY-NGN CREDITED', tx_ref, '₦'+paidAmt, '-> $'+creditUSD);
     }
-    return res.json({ ok:true, credited:true, amountUSD: inv.amount_usd });
+    return res.json({ ok:true, credited:true, amountUSD: creditUSD });
   }
   res.json({ ok:false, credited:false });
 });
