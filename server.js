@@ -53,28 +53,31 @@ const {
    ============================================================ */
 const USD_TO_NGN_SERVER = 1600;
 function resalePrice(service, country, costUSD){
-  const RATE = USD_TO_NGN_SERVER;               // 1600
-  const CAP_NGN = 10000;                         // safe ceiling
+  const RATE = USD_TO_NGN_SERVER;                // 1600
+  const CAP_NGN = 10000;                          // safe ceiling
   let priceUSD;
 
-  // --- special fixed prices ---
+  // ---- WhatsApp & Telegram: reliable operators, hybrid pricing ----
+  // USA gets a fixed headline price; other countries use ×2.0 with a ₦1,200 min profit.
   if(service === 'whatsapp' && country === 'usa'){
-    priceUSD = +(2000 / RATE).toFixed(4);         // fixed ₦2,000
+    priceUSD = 3500 / RATE;                        // fixed ₦3,500
   } else if(service === 'telegram' && country === 'usa'){
-    priceUSD = +(3000 / RATE).toFixed(4);         // fixed ₦3,000
-  } else if(service === 'whatsapp' && country === 'australia'){
-    priceUSD = +(10000 / RATE).toFixed(4);        // fixed ₦10,000
+    priceUSD = 4000 / RATE;                        // fixed ₦4,000
+  } else if(service === 'whatsapp' || service === 'telegram'){
+    const x2 = costUSD * 2.0;
+    const minProfit = costUSD + (1200 / RATE);     // at least ₦1,200 profit
+    priceUSD = Math.max(x2, minProfit);
   } else {
-    // --- Option B tiered markup ---
+    // ---- everything else: Option B tiered markup ----
     const mult = costUSD >= 2.80 ? 1.8 : 2.5;
     priceUSD = Math.max(costUSD * mult, 0.50);
   }
 
-  // --- SAFE ₦10k cap: cap to ₦10k, but never below a safe margin over cost ---
-  const capUSD  = CAP_NGN / RATE;                 // $6.25
-  const safeMin = costUSD * 1.3;                  // never sell under cost+30%
+  // ---- safe ₦10k cap: cap to ₦10k, but never below cost+30% (never sell at a loss) ----
+  const capUSD  = CAP_NGN / RATE;
+  const safeMin = costUSD * 1.3;
   if(priceUSD > capUSD){
-    priceUSD = Math.max(capUSD, safeMin);         // cap, unless that would lose money
+    priceUSD = Math.max(capUSD, safeMin);
   }
   return +priceUSD.toFixed(4);
 }
@@ -386,44 +389,47 @@ app.post('/api/orders', rateLimit(20, 60000), auth, async (req,res)=>{
 
   const prices = await fivesim(`/guest/prices?country=${country}&product=${service}`);
   const MIN_RATE = 15;                          // skip only near-dead operators
-  const HARD_SERVICES = ['signal'];            // pick best-delivery operator for these
+  const HARD_SERVICES = ['signal','whatsapp','telegram'];  // pick best-delivery operator for these
   const preferReliability = HARD_SERVICES.includes(service);
-  let operator = 'any', cheapest = Infinity;    // cheapest that clears the success bar
-  let bestOp = 'any', bestRate = -1, bestOpCost = Infinity;   // highest success rate (for hard services)
-  let fbOperator = 'any', fbCheapest = Infinity; // fallback: cheapest overall in stock
+
+  // Build a ranked list of ALL in-stock operators so we can retry if one sells out
+  // (fixes WhatsApp "no numbers" race: high-demand numbers sell between check and buy).
+  let candidates = [];
   try {
     const ops = prices[country][service];
     for(const [name, info] of Object.entries(ops)){
       if(!info || info.count <= 0) continue;                 // must be in stock
-      if(info.cost < fbCheapest){ fbCheapest = info.cost; fbOperator = name; }
       const rate = (info.rate ?? info.rate24 ?? info.rate168 ?? null);
       const rateVal = (rate === null) ? 0 : rate;
-      // cheapest-that-passes (normal services)
       const passes = (rate === null || rate === 0) ? (info.rate24 == null && info.rate168 == null) : rate >= MIN_RATE;
-      if(passes && info.cost < cheapest){ cheapest = info.cost; operator = name; }
-      // highest-success-rate, but skip crazy-expensive (cap cost at $3 to protect margin)
-      if(info.cost <= 3.0 && (rateVal > bestRate || (rateVal === bestRate && info.cost < bestOpCost))){
-        bestRate = rateVal; bestOp = name; bestOpCost = info.cost;
-      }
+      candidates.push({ name, cost: info.cost, rate: rateVal, passes });
     }
   } catch(e){ /* no in-stock operators parsed */ }
-  // for hard services (Signal): prefer the best-delivery operator
-  if(preferReliability && bestOp !== 'any'){ operator = bestOp; cheapest = bestOpCost; }
-  // fallback: cheapest in-stock so we always offer a number
-  if(operator === 'any' && fbOperator !== 'any'){ operator = fbOperator; cheapest = fbCheapest; }
-  if(operator === 'any')
+
+  if(candidates.length === 0)
     return res.status(400).json({ error:'No numbers available right now, try another country' });
 
-  const order = await fivesim(`/user/buy/activation/${country}/${operator}/${service}`);
-  if(order._error)
-    {
-      const b=(order.body||'').toLowerCase();
-      if(b.includes('no free phones')||b.includes('no free')) return res.status(400).json({ error:'No numbers available for this service/country right now. Please try another country.' });
-      return res.status(400).json({ error:'Could not get a number, please try another country.' });
-    }
-  if(order.status !== 'PENDING' && order.status !== 'RECEIVED'){
-    return res.status(400).json({ error:'No numbers available, try another country' });
+  // Rank operators: Signal -> best success rate first; others -> cheapest-that-passes first
+  if(preferReliability){
+    candidates = candidates.filter(c => c.cost <= 3.0);       // skip crazy-expensive
+    candidates.sort((a,b)=> b.rate - a.rate || a.cost - b.cost);
+  } else {
+    candidates.sort((a,b)=> (b.passes - a.passes) || (a.cost - b.cost));
   }
+
+  // Try operators in order until one actually sells us a number (up to 4 tries)
+  let order = null, cheapest = 0;
+  for(let i = 0; i < Math.min(candidates.length, 4); i++){
+    const cand = candidates[i];
+    const o = await fivesim(`/user/buy/activation/${country}/${cand.name}/${service}`);
+    if(!o._error && (o.status === 'PENDING' || o.status === 'RECEIVED')){
+      order = o; cheapest = cand.cost; break;                 // success
+    }
+    // otherwise this operator sold out / errored -> try the next candidate
+  }
+
+  if(!order)
+    return res.status(400).json({ error:'No numbers available for this service/country right now. Please try another country.' });
 
   const costUSD   = Number(order.price);
   const resaleUSD = resalePrice(service, country, costUSD);   // SAME rule as display
