@@ -21,6 +21,7 @@ app.use(express.json());
 const {
   FIVESIM_TOKEN, NOWPAY_KEY, NOWPAY_IPN_SECRET,
   FLW_SECRET_KEY, FLW_WEBHOOK_HASH,
+  ADMIN_EMAIL, ADMIN_PASSWORD,
   JWT_SECRET = 'dev-secret', BASE_URL = 'http://localhost:3000'
 } = process.env;
 
@@ -297,6 +298,68 @@ app.get('/api/wallet/verify-ngn', auth, async (req,res)=>{
     return res.json({ ok:true, credited:true, amountUSD: creditUSD });
   }
   res.json({ ok:false, credited:false });
+});
+
+
+/* ============================================================
+   ADMIN  (protected: must be logged in as ADMIN_EMAIL + admin password)
+   ============================================================ */
+function adminAuth(req,res,next){
+  // layer 1: valid login token
+  const t = (req.headers.authorization||'').replace('Bearer ','');
+  let email;
+  try { email = jwt.verify(t, JWT_SECRET).email; } catch { return res.status(401).json({ error:'unauthorized' }); }
+  // layer 2: must be the admin account
+  if(!ADMIN_EMAIL || email !== ADMIN_EMAIL) return res.status(403).json({ error:'forbidden' });
+  // layer 3: correct admin password header
+  const pw = req.headers['x-admin-password'] || '';
+  if(!ADMIN_PASSWORD || pw !== ADMIN_PASSWORD) return res.status(403).json({ error:'admin password required' });
+  req.email = email;
+  next();
+}
+
+/* overview stats */
+app.get('/api/admin/stats', adminAuth, async (req,res)=>{
+  const users    = (await pool.query('SELECT COUNT(*)::int c, COALESCE(SUM(balance_usd),0)::float b FROM users')).rows[0];
+  const orders   = (await pool.query('SELECT COUNT(*)::int c, COALESCE(SUM(resale_usd),0)::float rev, COALESCE(SUM(cost_usd),0)::float cost FROM orders WHERE refunded=false')).rows[0];
+  const refunds  = (await pool.query('SELECT COUNT(*)::int c FROM orders WHERE refunded=true')).rows[0];
+  const topups   = (await pool.query('SELECT COUNT(*)::int c, COALESCE(SUM(amount_usd),0)::float t FROM invoices WHERE credited=true')).rows[0];
+  res.json({
+    users: users.c, walletTotalUSD: users.b,
+    ordersSold: orders.c, revenueUSD: orders.rev, supplierCostUSD: orders.cost,
+    grossProfitUSD: +(orders.rev - orders.cost).toFixed(2),
+    refunds: refunds.c,
+    topupsCount: topups.c, topupsTotalUSD: topups.t
+  });
+});
+
+/* users list */
+app.get('/api/admin/users', adminAuth, async (req,res)=>{
+  const rows = (await pool.query('SELECT email, balance_usd::float, created_at FROM users ORDER BY created_at DESC LIMIT 500')).rows;
+  res.json({ users: rows });
+});
+
+/* recent orders */
+app.get('/api/admin/orders', adminAuth, async (req,res)=>{
+  const rows = (await pool.query('SELECT id, email, cost_usd::float, resale_usd::float, refunded, created_at FROM orders ORDER BY created_at DESC LIMIT 200')).rows;
+  res.json({ orders: rows });
+});
+
+/* recent top-ups */
+app.get('/api/admin/topups', adminAuth, async (req,res)=>{
+  const rows = (await pool.query('SELECT order_id, email, amount_usd::float, credited, created_at FROM invoices ORDER BY created_at DESC LIMIT 200')).rows;
+  res.json({ topups: rows });
+});
+
+/* manual credit a wallet (safe: adds to balance) */
+app.post('/api/admin/credit', adminAuth, async (req,res)=>{
+  const { email, amountUSD } = req.body;
+  const amt = parseFloat(amountUSD);
+  if(!email || !amt || amt <= 0) return res.status(400).json({ error:'email and positive amount required' });
+  const u = await pool.query('UPDATE users SET balance_usd = balance_usd + $1 WHERE email=$2 RETURNING balance_usd::float', [amt, email]);
+  if(u.rowCount === 0) return res.status(404).json({ error:'no such user' });
+  console.log('ADMIN CREDIT', email, '+$'+amt, 'by', req.email);
+  res.json({ ok:true, newBalanceUSD: u.rows[0].balance_usd });
 });
 
 /* ---------- orders (buy a number) ---------- */
