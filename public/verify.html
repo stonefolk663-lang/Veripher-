@@ -303,8 +303,8 @@ function startPolling(){
     try{
       const r=await fetch('/api/orders/'+order.id,{headers:{Authorization:'Bearer '+token()}});
       const d=await r.json();
-      if(d.status==='RECEIVED'&&d.code){ clearInterval(pollInt); showCode(d.code,d.sender||order.service); }
-      else if(d.status==='CANCELED'||d.status==='TIMEOUT'){ clearInterval(pollInt); }
+      if(d.code){ clearInterval(pollInt); showCode(d.code,d.sender||order.service); }
+      else if(d.status==='CANCELED'||d.status==='TIMEOUT'||d.status==='BANNED'){ clearInterval(pollInt); }
     }catch(e){}
   },3000);
 }
