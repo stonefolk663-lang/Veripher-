@@ -409,10 +409,14 @@ app.post('/api/orders', rateLimit(20, 60000), auth, async (req,res)=>{
   if(candidates.length === 0)
     return res.status(400).json({ error:'No numbers available right now, try another country' });
 
-  // Rank operators: Signal -> best success rate first; others -> cheapest-that-passes first
+  // Rank operators.
+  const GOOD_RATE = 15;   // WhatsApp/Signal/Telegram: prefer operators >=15% success
   if(preferReliability){
-    candidates = candidates.filter(c => c.cost <= 3.0);       // skip crazy-expensive
-    candidates.sort((a,b)=> b.rate - a.rate || a.cost - b.cost);
+    candidates = candidates.filter(c => c.cost <= 3.5);       // skip crazy-expensive
+    // GOOD operators (>=15%) first, sorted by rate desc; then POOR ones as last resort
+    const good = candidates.filter(c => c.rate >= GOOD_RATE).sort((a,b)=> b.rate - a.rate || a.cost - b.cost);
+    const poor = candidates.filter(c => c.rate <  GOOD_RATE).sort((a,b)=> b.rate - a.rate || a.cost - b.cost);
+    candidates = good.concat(poor);   // good ones tried first, poor as fallback
   } else {
     candidates.sort((a,b)=> (b.passes - a.passes) || (a.cost - b.cost));
   }
