@@ -323,8 +323,10 @@ app.post('/api/orders', auth, async (req,res)=>{
       if(b.includes('no free phones')||b.includes('no free')) return res.status(400).json({ error:'No numbers available for this service/country right now. Please try another country.' });
       return res.status(400).json({ error:'Could not get a number, please try another country.' });
     }
-  if(order.status !== 'PENDING')
+  if(order.status !== 'PENDING' && order.status !== 'RECEIVED'){
+    console.log('BUY unexpected status:', order.status);
     return res.status(400).json({ error:'No numbers available, try another country' });
+  }
 
   const costUSD   = Number(order.price);
   const resaleUSD = resalePrice(service, country, costUSD);   // SAME rule as display
