@@ -301,14 +301,17 @@ app.get('/api/wallet/verify-ngn', auth, async (req,res)=>{
 app.post('/api/orders', auth, async (req,res)=>{
   const { service, country } = req.body;
 
+  console.log('BUY requested | service=', service, '| country=', country, '| user=', req.email);
   const prices = await fivesim(`/guest/prices?country=${country}&product=${service}`);
   let operator = 'any', cheapest = Infinity;
   try {
     const ops = prices[country][service];
+    console.log('BUY operators found:', ops ? Object.keys(ops).length : 'NONE', ops ? JSON.stringify(ops).slice(0,300) : '');
     for(const [name, info] of Object.entries(ops)){
       if(info.count > 0 && info.cost < cheapest){ cheapest = info.cost; operator = name; }
     }
-  } catch(e){}
+  } catch(e){ console.log('BUY price-parse error:', e.message, '| raw:', JSON.stringify(prices).slice(0,200)); }
+  console.log('BUY chosen operator:', operator, '| cost:', cheapest);
   if(operator === 'any')
     return res.status(400).json({ error:'No numbers available right now, try another country' });
 
