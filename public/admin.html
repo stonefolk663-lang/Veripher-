@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Veripher — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#F6F9FC;--surface:#FFFFFF;--border:#E7EBF0;--border-2:#DDE3EC;--ink:#0A2540;--muted:#68758B;--faint:#94A0B4;--primary:#635BFF;--primary-h:#524ce6;--primary-soft:#EEEDFF;--teal:#06A594;--teal-soft:#E4F7F3;--green:#0A8F5B;--green-soft:#E3F6EC;--amber:#B26B00;--amber-soft:#FFF4E2;--danger:#E2483D;--danger-soft:#FEF3F2;--shadow:0 1px 2px rgba(10,37,64,.04),0 4px 12px rgba(10,37,64,.06)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;padding:24px}
+  .wrap{max-width:1100px;margin:0 auto}
+  h1{font-size:24px;font-weight:800;letter-spacing:-.02em;margin-bottom:4px;display:flex;align-items:center;gap:10px}
+  .sub{font-size:13px;color:var(--muted);margin-bottom:24px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;box-shadow:var(--shadow);margin-bottom:16px}
+  label{display:block;font-size:13px;font-weight:600;margin:12px 0 6px}
+  input{width:100%;background:var(--bg);border:1px solid var(--border-2);border-radius:10px;padding:12px 13px;font-size:14px;font-family:'Inter'}
+  input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);background:#fff}
+  .btn{border:none;border-radius:10px;padding:12px 18px;font-size:14px;font-weight:600;font-family:'Inter';cursor:pointer;background:var(--primary);color:#fff;transition:background .15s}
+  .btn:hover{background:var(--primary-h)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .err{display:none;background:var(--danger-soft);border:1px solid #F3C9C5;color:var(--danger);font-size:13px;padding:10px 13px;border-radius:9px;margin-top:10px}
+  .err.show{display:block}
+  .hide{display:none}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:var(--shadow)}
+  .stat .lbl{font-size:12px;color:var(--muted);font-weight:600;margin-bottom:6px}
+  .stat .val{font-size:22px;font-weight:800;font-family:'JetBrains Mono';letter-spacing:-.02em}
+  .stat.green .val{color:var(--green)} .stat.primary .val{color:var(--primary)} .stat.amber .val{color:var(--amber)}
+  .tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .tab{padding:8px 15px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border-2);background:var(--surface)}
+  .tab.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border);padding:9px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+  td{border-bottom:1px solid var(--border);padding:9px 10px}
+  td.mono{font-family:'JetBrains Mono';font-size:12px}
+  .pill{font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
+  .pill.ok{background:var(--green-soft);color:var(--green)} .pill.no{background:var(--danger-soft);color:var(--danger)}
+  .row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+  .row > div{flex:1;min-width:140px}
+  .ok-msg{display:none;background:var(--green-soft);border:1px solid #BFE9D2;color:var(--green);font-size:13px;padding:10px 13px;border-radius:9px;margin-top:10px}
+  .ok-msg.show{display:block}
+  .refresh{font-size:12px;color:var(--primary);cursor:pointer;font-weight:600;margin-left:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔐 Veripher Admin</h1>
+  <div class="sub">Business overview & controls</div>
+
+  <!-- LOGIN GATE -->
+  <div class="card" id="gate" style="max-width:420px">
+    <div style="font-weight:700;margin-bottom:4px">Admin sign-in</div>
+    <div style="font-size:13px;color:var(--muted)">Enter your admin credentials.</div>
+    <label>Admin email</label>
+    <input type="email" id="aEmail" placeholder="admin@email.com">
+    <label>Account password</label>
+    <input type="password" id="aPass" placeholder="your login password">
+    <label>Admin password</label>
+    <input type="password" id="aAdminPass" placeholder="admin dashboard password">
+    <button class="btn" id="loginBtn" style="width:100%;margin-top:16px">Unlock dashboard</button>
+    <div class="err" id="gateErr"></div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="hide" id="dash">
+    <div class="stats" id="statsGrid"></div>
+
+    <div class="card">
+      <div style="display:flex;align-items:center;margin-bottom:14px">
+        <div style="font-weight:700">Records</div>
+        <span class="refresh" id="refreshBtn">↻ Refresh</span>
+      </div>
+      <div class="tabs">
+        <div class="tab active" data-t="users">Users</div>
+        <div class="tab" data-t="orders">Orders</div>
+        <div class="tab" data-t="topups">Top-ups</div>
+        <div class="tab" data-t="credit">Manual credit</div>
+      </div>
+      <div id="panel"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const NGN=1600;
+let creds={token:null, adminPass:null};
+function ngn(usd){return '₦'+Math.round(usd*NGN).toLocaleString();}
+function fmtDate(d){ if(!d)return '—'; const x=new Date(d); return x.toLocaleDateString()+' '+x.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+function H(headers={}){ return Object.assign({'Authorization':'Bearer '+creds.token,'x-admin-password':creds.adminPass}, headers); }
+
+$('loginBtn').onclick=async()=>{
+  $('gateErr').classList.remove('show');
+  const email=$('aEmail').value.trim(), pass=$('aPass').value, adminPass=$('aAdminPass').value;
+  if(!email||!pass||!adminPass){ $('gateErr').textContent='Fill in all three fields.'; $('gateErr').classList.add('show'); return; }
+  $('loginBtn').disabled=true; $('loginBtn').textContent='Checking…';
+  try{
+    // step 1: normal login to get token
+    const lr=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,pass})});
+    const ld=await lr.json();
+    if(!lr.ok){ throw new Error(ld.error||'Login failed'); }
+    creds.token=ld.token; creds.adminPass=adminPass;
+    // step 2: try an admin call to verify admin rights + admin password
+    const sr=await fetch('/api/admin/stats',{headers:H()});
+    if(sr.status===403){ throw new Error('Not authorised — wrong admin account or admin password.'); }
+    if(!sr.ok){ throw new Error('Access denied.'); }
+    $('gate').classList.add('hide'); $('dash').classList.remove('hide');
+    loadAll();
+  }catch(e){ $('gateErr').textContent=e.message; $('gateErr').classList.add('show'); }
+  $('loginBtn').disabled=false; $('loginBtn').textContent='Unlock dashboard';
+};
+
+async function loadStats(){
+  const d=await (await fetch('/api/admin/stats',{headers:H()})).json();
+  $('statsGrid').innerHTML=`
+    <div class="stat primary"><div class="lbl">Users</div><div class="val">${d.users}</div></div>
+    <div class="stat"><div class="lbl">Wallet balances held</div><div class="val">${ngn(d.walletTotalUSD)}</div></div>
+    <div class="stat"><div class="lbl">Numbers sold</div><div class="val">${d.ordersSold}</div></div>
+    <div class="stat green"><div class="lbl">Revenue</div><div class="val">${ngn(d.revenueUSD)}</div></div>
+    <div class="stat amber"><div class="lbl">Supplier cost</div><div class="val">${ngn(d.supplierCostUSD)}</div></div>
+    <div class="stat green"><div class="lbl">Gross profit</div><div class="val">${ngn(d.grossProfitUSD)}</div></div>
+    <div class="stat"><div class="lbl">Top-ups</div><div class="val">${ngn(d.topupsTotalUSD)}</div></div>
+    <div class="stat"><div class="lbl">Refunds</div><div class="val">${d.refunds}</div></div>`;
+}
+async function showUsers(){
+  const d=await (await fetch('/api/admin/users',{headers:H()})).json();
+  $('panel').innerHTML=`<table><thead><tr><th>Email</th><th>Balance</th><th>Joined</th></tr></thead><tbody>${
+    d.users.map(u=>`<tr><td class="mono">${u.email}</td><td class="mono">${ngn(u.balance_usd)} <span style="color:var(--faint)">$${u.balance_usd.toFixed(2)}</span></td><td>${fmtDate(u.created_at)}</td></tr>`).join('')||'<tr><td colspan=3 style="color:var(--faint);text-align:center;padding:20px">No users yet</td></tr>'
+  }</tbody></table>`;
+}
+async function showOrders(){
+  const d=await (await fetch('/api/admin/orders',{headers:H()})).json();
+  $('panel').innerHTML=`<table><thead><tr><th>Order</th><th>User</th><th>Cost</th><th>Sold</th><th>Status</th><th>When</th></tr></thead><tbody>${
+    d.orders.map(o=>`<tr><td class="mono">${o.id}</td><td class="mono">${o.email}</td><td class="mono">$${o.cost_usd.toFixed(2)}</td><td class="mono">${ngn(o.resale_usd)}</td><td>${o.refunded?'<span class="pill no">refunded</span>':'<span class="pill ok">sold</span>'}</td><td>${fmtDate(o.created_at)}</td></tr>`).join('')||'<tr><td colspan=6 style="color:var(--faint);text-align:center;padding:20px">No orders yet</td></tr>'
+  }</tbody></table>`;
+}
+async function showTopups(){
+  const d=await (await fetch('/api/admin/topups',{headers:H()})).json();
+  $('panel').innerHTML=`<table><thead><tr><th>Reference</th><th>User</th><th>Amount</th><th>Credited</th><th>When</th></tr></thead><tbody>${
+    d.topups.map(t=>`<tr><td class="mono">${t.order_id}</td><td class="mono">${t.email}</td><td class="mono">${ngn(t.amount_usd)}</td><td>${t.credited?'<span class="pill ok">yes</span>':'<span class="pill no">pending</span>'}</td><td>${fmtDate(t.created_at)}</td></tr>`).join('')||'<tr><td colspan=5 style="color:var(--faint);text-align:center;padding:20px">No top-ups yet</td></tr>'
+  }</tbody></table>`;
+}
+function showCredit(){
+  $('panel').innerHTML=`
+    <div style="max-width:460px">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:6px">Manually add balance to a wallet (e.g. a payment that didn't auto-credit). Confirm the payment is real first.</div>
+      <label>Customer email</label>
+      <input type="email" id="cEmail" placeholder="customer@email.com">
+      <div class="row" style="margin-top:6px">
+        <div><label>Amount (₦)</label><input type="number" id="cNgn" placeholder="e.g. 8000"></div>
+        <div style="flex:0 0 auto"><button class="btn" id="creditBtn" style="height:44px">Add credit</button></div>
+      </div>
+      <div style="font-size:12px;color:var(--faint);margin-top:6px" id="cPreview"></div>
+      <div class="err" id="cErr"></div>
+      <div class="ok-msg" id="cOk"></div>
+    </div>`;
+  $('cNgn').addEventListener('input',()=>{ const n=parseFloat($('cNgn').value); $('cPreview').textContent = n>0 ? '= $'+(n/NGN).toFixed(2)+' will be added' : ''; });
+  $('creditBtn').onclick=async()=>{
+    $('cErr').classList.remove('show'); $('cOk').classList.remove('show');
+    const email=$('cEmail').value.trim(), ngnAmt=parseFloat($('cNgn').value);
+    if(!email||!ngnAmt||ngnAmt<=0){ $('cErr').textContent='Enter a valid email and amount.'; $('cErr').classList.add('show'); return; }
+    const amountUSD=+(ngnAmt/NGN).toFixed(4);
+    if(!confirm('Add '+ngn(amountUSD/1*1)+' ('+'$'+amountUSD+') to '+email+'?')) return;
+    $('creditBtn').disabled=true;
+    try{
+      const r=await fetch('/api/admin/credit',{method:'POST',headers:H({'Content-Type':'application/json'}),body:JSON.stringify({email,amountUSD})});
+      const d=await r.json();
+      if(!r.ok) throw new Error(d.error||'Failed');
+      $('cOk').textContent='✓ Credited. New balance: '+ngn(d.newBalanceUSD)+' ($'+d.newBalanceUSD.toFixed(2)+')';
+      $('cOk').classList.add('show'); $('cEmail').value=''; $('cNgn').value=''; $('cPreview').textContent='';
+      loadStats();
+    }catch(e){ $('cErr').textContent=e.message; $('cErr').classList.add('show'); }
+    $('creditBtn').disabled=false;
+  };
+}
+
+const panels={users:showUsers,orders:showOrders,topups:showTopups,credit:showCredit};
+let currentTab='users';
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active'); currentTab=t.dataset.t; panels[currentTab]();
+});
+$('refreshBtn').onclick=()=>{ loadStats(); panels[currentTab](); };
+function loadAll(){ loadStats(); showUsers(); }
+</script>
+</body>
+</html>
