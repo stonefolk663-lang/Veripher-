@@ -17,6 +17,27 @@ const app = express();
 app.use(express.static('public'));
 app.use('/api/ipn', express.raw({ type: '*/*' }));
 app.use(express.json());
+app.set('trust proxy', 1);   // Render is behind a proxy
+
+/* ---------- simple in-memory rate limiting ---------- */
+const rlBuckets = new Map();
+function rateLimit(maxHits, windowMs){
+  return (req,res,next)=>{
+    const key = (req.headers['x-forwarded-for'] || req.ip || 'unknown') + ':' + req.path;
+    const now = Date.now();
+    let b = rlBuckets.get(key);
+    if(!b || now > b.reset){ b = { count:0, reset: now + windowMs }; rlBuckets.set(key, b); }
+    b.count++;
+    if(b.count > maxHits){
+      const wait = Math.ceil((b.reset - now)/1000);
+      return res.status(429).json({ error:'Too many attempts. Please wait '+wait+'s and try again.' });
+    }
+    next();
+  };
+}
+// occasionally clear old buckets so memory stays small
+setInterval(()=>{ const now=Date.now(); for(const [k,b] of rlBuckets){ if(now>b.reset) rlBuckets.delete(k); } }, 60000);
+
 
 const {
   FIVESIM_TOKEN, NOWPAY_KEY, NOWPAY_IPN_SECRET,
@@ -89,7 +110,7 @@ function auth(req,res,next){
 }
 
 /* ---------- auth ---------- */
-app.post('/api/signup', async (req,res)=>{
+app.post('/api/signup', rateLimit(8, 60000), async (req,res)=>{
   const { email, pass } = req.body;
   if(!email || !pass) return res.status(400).json({ error:'Email and password required' });
   const exists = await pool.query('SELECT 1 FROM users WHERE email=$1', [email]);
@@ -99,7 +120,7 @@ app.post('/api/signup', async (req,res)=>{
   res.json({ token: jwt.sign({ email }, JWT_SECRET, { expiresIn:'30d' }), balanceUSD: 0 });
 });
 
-app.post('/api/login', async (req,res)=>{
+app.post('/api/login', rateLimit(8, 60000), async (req,res)=>{
   const { email, pass } = req.body;
   const u = (await pool.query('SELECT * FROM users WHERE email=$1', [email])).rows[0];
   if(!u || !(await bcrypt.compare(pass, u.pass_hash)))
@@ -132,7 +153,7 @@ app.get('/api/prices/:country', async (req,res)=>{
 });
 
 /* ---------- wallet top-up ---------- */
-app.post('/api/wallet/topup', auth, async (req,res)=>{
+app.post('/api/wallet/topup', rateLimit(15, 60000), auth, async (req,res)=>{
   const amountUSD = parseFloat(req.body.amountUSD);
   if(!amountUSD || amountUSD < 20) return res.status(400).json({ error:'Minimum top-up is $20' });
   const orderId = 'topup_' + crypto.randomBytes(8).toString('hex');
@@ -182,7 +203,7 @@ function sortKeys(o){
 const NGN_RATE = 1600;
 const MIN_NGN  = 500;   // minimum naira top-up
 
-app.post('/api/wallet/topup-ngn', auth, async (req,res)=>{
+app.post('/api/wallet/topup-ngn', rateLimit(15, 60000), auth, async (req,res)=>{
   const amountNGN = Math.round(parseFloat(req.body.amountNGN));
   if(!amountNGN || amountNGN < MIN_NGN)
     return res.status(400).json({ error:'Minimum deposit is ₦500' });
@@ -319,7 +340,7 @@ function adminAuth(req,res,next){
 }
 
 /* overview stats */
-app.get('/api/admin/stats', adminAuth, async (req,res)=>{
+app.get('/api/admin/stats', rateLimit(20, 60000), adminAuth, async (req,res)=>{
   const users    = (await pool.query('SELECT COUNT(*)::int c, COALESCE(SUM(balance_usd),0)::float b FROM users')).rows[0];
   const orders   = (await pool.query('SELECT COUNT(*)::int c, COALESCE(SUM(resale_usd),0)::float rev, COALESCE(SUM(cost_usd),0)::float cost FROM orders WHERE refunded=false')).rows[0];
   const refunds  = (await pool.query('SELECT COUNT(*)::int c FROM orders WHERE refunded=true')).rows[0];
@@ -363,28 +384,37 @@ app.post('/api/admin/credit', adminAuth, async (req,res)=>{
 });
 
 /* ---------- orders (buy a number) ---------- */
-app.post('/api/orders', auth, async (req,res)=>{
+app.post('/api/orders', rateLimit(20, 60000), auth, async (req,res)=>{
   const { service, country } = req.body;
 
   console.log('BUY requested | service=', service, '| country=', country, '| user=', req.email);
   const prices = await fivesim(`/guest/prices?country=${country}&product=${service}`);
   const MIN_RATE = 15;                          // skip only near-dead operators
-  let operator = 'any', cheapest = Infinity;    // best pick that clears the success bar
+  const HARD_SERVICES = ['signal'];            // pick best-delivery operator for these
+  const preferReliability = HARD_SERVICES.includes(service);
+  let operator = 'any', cheapest = Infinity;    // cheapest that clears the success bar
+  let bestOp = 'any', bestRate = -1, bestOpCost = Infinity;   // highest success rate (for hard services)
   let fbOperator = 'any', fbCheapest = Infinity; // fallback: cheapest overall in stock
   try {
     const ops = prices[country][service];
     console.log('BUY operators found:', ops ? Object.keys(ops).length : 'NONE', ops ? JSON.stringify(ops).slice(0,400) : '');
     for(const [name, info] of Object.entries(ops)){
       if(!info || info.count <= 0) continue;                 // must be in stock
-      // fallback tracker (cheapest in stock, ignoring success)
       if(info.cost < fbCheapest){ fbCheapest = info.cost; fbOperator = name; }
-      // success rate: use best available recent window; if no data, treat as passing (don't exclude good cheap ones)
       const rate = (info.rate ?? info.rate24 ?? info.rate168 ?? null);
+      const rateVal = (rate === null) ? 0 : rate;
+      // cheapest-that-passes (normal services)
       const passes = (rate === null || rate === 0) ? (info.rate24 == null && info.rate168 == null) : rate >= MIN_RATE;
       if(passes && info.cost < cheapest){ cheapest = info.cost; operator = name; }
+      // highest-success-rate, but skip crazy-expensive (cap cost at $3 to protect margin)
+      if(info.cost <= 3.0 && (rateVal > bestRate || (rateVal === bestRate && info.cost < bestOpCost))){
+        bestRate = rateVal; bestOp = name; bestOpCost = info.cost;
+      }
     }
   } catch(e){ console.log('BUY price-parse error:', e.message, '| raw:', JSON.stringify(prices).slice(0,200)); }
-  // if nothing cleared the bar, fall back to cheapest in-stock so we still offer a number
+  // for hard services (Signal): prefer the best-delivery operator
+  if(preferReliability && bestOp !== 'any'){ operator = bestOp; cheapest = bestOpCost; console.log('BUY hard-service -> top operator', bestOp, 'rate', bestRate); }
+  // fallback: cheapest in-stock so we always offer a number
   if(operator === 'any' && fbOperator !== 'any'){ operator = fbOperator; cheapest = fbCheapest; console.log('BUY fallback to cheapest in-stock'); }
   console.log('BUY chosen operator:', operator, '| cost:', cheapest);
   if(operator === 'any')
