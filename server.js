@@ -316,6 +316,7 @@ app.post('/api/orders', auth, async (req,res)=>{
     return res.status(400).json({ error:'No numbers available right now, try another country' });
 
   const order = await fivesim(`/user/buy/activation/${country}/${operator}/${service}`);
+  console.log('BUY result from 5sim:', JSON.stringify(order).slice(0,300));
   if(order._error)
     {
       const b=(order.body||'').toLowerCase();
