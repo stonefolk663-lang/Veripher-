@@ -346,6 +346,7 @@ app.post('/api/orders', auth, async (req,res)=>{
 
 app.get('/api/orders/:id', auth, async (req,res)=>{
   const d = await fivesim(`/user/check/${req.params.id}`);
+  console.log('CHECK order', req.params.id, '| status=', d.status, '| sms=', JSON.stringify(d.sms||null).slice(0,300));
   const sms = (d.sms && d.sms[0]) || null;
   res.json({ status:d.status, code: sms?sms.code:null, sender: sms?sms.sender:null });
 });
