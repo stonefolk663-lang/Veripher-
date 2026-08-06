@@ -273,16 +273,15 @@ app.post('/api/ipn/flutterwave', express.json(), async (req,res)=>{
 app.get('/api/wallet/verify-ngn', auth, async (req,res)=>{
   const tx_ref = req.query.tx_ref;
   const tx_id  = req.query.transaction_id;   // Flutterwave passes this on redirect
-  console.log('VERIFY-NGN called | tx_ref=', tx_ref, '| tx_id=', tx_id, '| user=', req.email);
-  if(!tx_ref && !tx_id){ console.log('VERIFY-NGN: missing reference'); return res.status(400).json({ error:'missing reference' }); }
+  if(!tx_ref && !tx_id){ return res.status(400).json({ error:'missing reference' }); }
 
   // find our pending invoice by ref
   let inv = null;
   if(tx_ref){
     inv = (await pool.query('SELECT * FROM invoices WHERE order_id=$1', [tx_ref])).rows[0];
   }
-  if(!inv){ console.log('VERIFY-NGN: no invoice found for ref', tx_ref); return res.json({ ok:false, credited:false, reason:'no_invoice' }); }
-  if(inv.credited){ console.log('VERIFY-NGN: already credited', tx_ref); return res.json({ ok:true, credited:true, already:true }); }
+  if(!inv){ return res.json({ ok:false, credited:false, reason:'no_invoice' }); }
+  if(inv.credited){ return res.json({ ok:true, credited:true, already:true }); }
 
   // ask Flutterwave directly whether this really succeeded
   let vd = null;
@@ -305,8 +304,6 @@ app.get('/api/wallet/verify-ngn', auth, async (req,res)=>{
   const paidCur = vd && vd.data ? vd.data.currency : null;
   // allow a small tolerance so naira/dollar rounding never blocks a genuine payment
   const paidEnough = okPaid && paidCur === 'NGN' && paidAmt >= (expectedNGN - 20);
-  console.log('VERIFY-NGN result | flwStatus=', vd&&vd.status, '| txStatus=', vd&&vd.data&&vd.data.status,
-              '| paid=', paidAmt, paidCur, '| expected=', expectedNGN, '| willCredit=', paidEnough);
 
   if(paidEnough){
     // credit once
@@ -387,7 +384,6 @@ app.post('/api/admin/credit', adminAuth, async (req,res)=>{
 app.post('/api/orders', rateLimit(20, 60000), auth, async (req,res)=>{
   const { service, country } = req.body;
 
-  console.log('BUY requested | service=', service, '| country=', country, '| user=', req.email);
   const prices = await fivesim(`/guest/prices?country=${country}&product=${service}`);
   const MIN_RATE = 15;                          // skip only near-dead operators
   const HARD_SERVICES = ['signal'];            // pick best-delivery operator for these
@@ -397,7 +393,6 @@ app.post('/api/orders', rateLimit(20, 60000), auth, async (req,res)=>{
   let fbOperator = 'any', fbCheapest = Infinity; // fallback: cheapest overall in stock
   try {
     const ops = prices[country][service];
-    console.log('BUY operators found:', ops ? Object.keys(ops).length : 'NONE', ops ? JSON.stringify(ops).slice(0,400) : '');
     for(const [name, info] of Object.entries(ops)){
       if(!info || info.count <= 0) continue;                 // must be in stock
       if(info.cost < fbCheapest){ fbCheapest = info.cost; fbOperator = name; }
@@ -411,17 +406,15 @@ app.post('/api/orders', rateLimit(20, 60000), auth, async (req,res)=>{
         bestRate = rateVal; bestOp = name; bestOpCost = info.cost;
       }
     }
-  } catch(e){ console.log('BUY price-parse error:', e.message, '| raw:', JSON.stringify(prices).slice(0,200)); }
+  } catch(e){ /* no in-stock operators parsed */ }
   // for hard services (Signal): prefer the best-delivery operator
-  if(preferReliability && bestOp !== 'any'){ operator = bestOp; cheapest = bestOpCost; console.log('BUY hard-service -> top operator', bestOp, 'rate', bestRate); }
+  if(preferReliability && bestOp !== 'any'){ operator = bestOp; cheapest = bestOpCost; }
   // fallback: cheapest in-stock so we always offer a number
-  if(operator === 'any' && fbOperator !== 'any'){ operator = fbOperator; cheapest = fbCheapest; console.log('BUY fallback to cheapest in-stock'); }
-  console.log('BUY chosen operator:', operator, '| cost:', cheapest);
+  if(operator === 'any' && fbOperator !== 'any'){ operator = fbOperator; cheapest = fbCheapest; }
   if(operator === 'any')
     return res.status(400).json({ error:'No numbers available right now, try another country' });
 
   const order = await fivesim(`/user/buy/activation/${country}/${operator}/${service}`);
-  console.log('BUY result from 5sim:', JSON.stringify(order).slice(0,300));
   if(order._error)
     {
       const b=(order.body||'').toLowerCase();
@@ -429,7 +422,6 @@ app.post('/api/orders', rateLimit(20, 60000), auth, async (req,res)=>{
       return res.status(400).json({ error:'Could not get a number, please try another country.' });
     }
   if(order.status !== 'PENDING' && order.status !== 'RECEIVED'){
-    console.log('BUY unexpected status:', order.status);
     return res.status(400).json({ error:'No numbers available, try another country' });
   }
 
@@ -451,7 +443,6 @@ app.post('/api/orders', rateLimit(20, 60000), auth, async (req,res)=>{
 
 app.get('/api/orders/:id', auth, async (req,res)=>{
   const d = await fivesim(`/user/check/${req.params.id}`);
-  console.log('CHECK order', req.params.id, '| status=', d.status, '| sms=', JSON.stringify(d.sms||null).slice(0,300));
   const sms = (d.sms && d.sms[0]) || null;
   res.json({ status:d.status, code: sms?sms.code:null, sender: sms?sms.sender:null });
 });
