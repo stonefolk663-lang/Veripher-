@@ -37,11 +37,11 @@ function resalePrice(service, country, costUSD){
 
   // --- special fixed prices ---
   if(service === 'whatsapp' && country === 'usa'){
-    priceUSD = 2000 / RATE;                       // fixed ₦2,000
+    priceUSD = +(2000 / RATE).toFixed(4);         // fixed ₦2,000
   } else if(service === 'telegram' && country === 'usa'){
-    priceUSD = 3000 / RATE;                       // fixed ₦3,000
+    priceUSD = +(3000 / RATE).toFixed(4);         // fixed ₦3,000
   } else if(service === 'whatsapp' && country === 'australia'){
-    priceUSD = 10000 / RATE;                      // fixed ₦10,000
+    priceUSD = +(10000 / RATE).toFixed(4);        // fixed ₦10,000
   } else {
     // --- Option B tiered markup ---
     const mult = costUSD >= 2.80 ? 1.8 : 2.5;
@@ -54,7 +54,7 @@ function resalePrice(service, country, costUSD){
   if(priceUSD > capUSD){
     priceUSD = Math.max(capUSD, safeMin);         // cap, unless that would lose money
   }
-  return +priceUSD.toFixed(2);
+  return +priceUSD.toFixed(4);
 }
 
 /* find the cheapest IN-STOCK operator cost for a service in 5sim price data */
