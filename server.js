@@ -247,15 +247,16 @@ app.post('/api/ipn/flutterwave', express.json(), async (req,res)=>{
 app.get('/api/wallet/verify-ngn', auth, async (req,res)=>{
   const tx_ref = req.query.tx_ref;
   const tx_id  = req.query.transaction_id;   // Flutterwave passes this on redirect
-  if(!tx_ref && !tx_id) return res.status(400).json({ error:'missing reference' });
+  console.log('VERIFY-NGN called | tx_ref=', tx_ref, '| tx_id=', tx_id, '| user=', req.email);
+  if(!tx_ref && !tx_id){ console.log('VERIFY-NGN: missing reference'); return res.status(400).json({ error:'missing reference' }); }
 
   // find our pending invoice by ref
   let inv = null;
   if(tx_ref){
     inv = (await pool.query('SELECT * FROM invoices WHERE order_id=$1', [tx_ref])).rows[0];
   }
-  if(!inv) return res.json({ ok:false, credited:false });
-  if(inv.credited) return res.json({ ok:true, credited:true, already:true });
+  if(!inv){ console.log('VERIFY-NGN: no invoice found for ref', tx_ref); return res.json({ ok:false, credited:false, reason:'no_invoice' }); }
+  if(inv.credited){ console.log('VERIFY-NGN: already credited', tx_ref); return res.json({ ok:true, credited:true, already:true }); }
 
   // ask Flutterwave directly whether this really succeeded
   let vd = null;
@@ -274,8 +275,11 @@ app.get('/api/wallet/verify-ngn', auth, async (req,res)=>{
 
   const okPaid = vd && vd.status==='success' && vd.data && vd.data.status==='successful';
   const expectedNGN = Math.round(inv.amount_usd * NGN_RATE);
-  const paidEnough = okPaid && Number(vd.data.amount) >= expectedNGN - 1
-                     && (vd.data.currency === 'NGN');
+  const paidAmt = vd && vd.data ? Number(vd.data.amount) : null;
+  const paidCur = vd && vd.data ? vd.data.currency : null;
+  const paidEnough = okPaid && paidAmt >= expectedNGN - 1 && (paidCur === 'NGN');
+  console.log('VERIFY-NGN result | flwStatus=', vd&&vd.status, '| txStatus=', vd&&vd.data&&vd.data.status,
+              '| paid=', paidAmt, paidCur, '| expected=', expectedNGN, '| willCredit=', paidEnough);
 
   if(paidEnough){
     // credit once
@@ -305,7 +309,11 @@ app.post('/api/orders', auth, async (req,res)=>{
 
   const order = await fivesim(`/user/buy/activation/${country}/${operator}/${service}`);
   if(order._error)
-    return res.status(400).json({ error:'5sim said: '+(order.body || ('HTTP '+order.status))+' — try another country' });
+    {
+      const b=(order.body||'').toLowerCase();
+      if(b.includes('no free phones')||b.includes('no free')) return res.status(400).json({ error:'No numbers available for this service/country right now. Please try another country.' });
+      return res.status(400).json({ error:'Could not get a number, please try another country.' });
+    }
   if(order.status !== 'PENDING')
     return res.status(400).json({ error:'No numbers available, try another country' });
 
