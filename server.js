@@ -423,7 +423,9 @@ app.post('/api/orders', rateLimit(20, 60000), auth, async (req,res)=>{
     const cand = candidates[i];
     const o = await fivesim(`/user/buy/activation/${country}/${cand.name}/${service}`);
     if(!o._error && (o.status === 'PENDING' || o.status === 'RECEIVED')){
-      order = o; cheapest = cand.cost; break;                 // success
+      order = o; cheapest = cand.cost;
+      console.log('BUY OK', service, country, '| operator=', cand.name, '| rate=', cand.rate, '| id=', o.id, '| phone=', o.phone);
+      break;                 // success
     }
     // otherwise this operator sold out / errored -> try the next candidate
   }
@@ -449,6 +451,7 @@ app.post('/api/orders', rateLimit(20, 60000), auth, async (req,res)=>{
 
 app.get('/api/orders/:id', auth, async (req,res)=>{
   const d = await fivesim(`/user/check/${req.params.id}`);
+  console.log('SMS-CHECK', req.params.id, '| status=', d.status, '| sms=', JSON.stringify(d.sms||[]).slice(0,200));
   const sms = (d.sms && d.sms[0]) || null;
   res.json({ status:d.status, code: sms?sms.code:null, sender: sms?sms.sender:null });
 });
